@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "run_id": "example123",
+  "config_id": "config123",
+  "project_id": "project123",
+  "channel": "stable",
+  "idempotency_key": "auto-build-example-project001-stable-branch-main-abcdef1",
+  "source_repo": "owner/repo",
+  "source_mode": "branch",
+  "source_identifier": "main",
+  "source_commit_sha": "abcdef1234567890abcdef1234567890abcdef12",
+  "build_profile": "default",
+  "runner_repo": "owner/runner-repo",
+  "runner_workflow": "build.yml",
+  "build_command": "mvn package",
+  "java_version": "21",
+  "maven_version": "3.9",
+  "callback_url": "https://example.com/api/auto-build/callback",
+  "artifact_retention": 7
+}

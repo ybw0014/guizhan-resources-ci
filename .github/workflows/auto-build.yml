@@ -1,0 +1,101 @@
+name: Auto Build
+
+run-name: Auto Build ${{ fromJson(inputs.build_payload).run_id }} ${{ fromJson(inputs.build_payload).idempotency_key }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_payload:
+        description: Versioned Guizhan Resources auto-build payload JSON
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checking out runner repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "25.8.2"
+          cache: "pnpm"
+
+      - name: Install runner dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compile runner scripts
+        run: pnpm exec tsc --outDir dist --declaration false --declarationMap false
+
+      - name: Validate build payload
+        id: payload
+        run: node dist/src/runner.js validate
+        env:
+          BUILD_PAYLOAD: ${{ inputs.build_payload }}
+
+      - name: Checking out source repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ steps.payload.outputs.source_repo }}
+          ref: ${{ steps.payload.outputs.source_commit_sha }}
+          path: source
+          persist-credentials: false
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ steps.payload.outputs.java_version }}
+
+      - name: Setup Maven
+        uses: s4u/setup-maven-action@v1.18.0
+        with:
+          maven-version: ${{ steps.payload.outputs.maven_version }}
+
+      - name: Run SDKMAN custom setup
+        if: steps.payload.outputs.sdkman_custom != ''
+        run: node dist/src/toolchain.js
+        env:
+          SDKMAN_CUSTOM: ${{ steps.payload.outputs.sdkman_custom }}
+
+      - name: Run explicit build command
+        run: node dist/src/runner.js build payload.json source
+
+      - name: Generate manifest
+        id: manifest
+        run: node dist/src/runner.js manifest payload.json source .runner-output
+
+      - name: Upload manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.manifest.outputs.manifest_artifact_name }}
+          path: ${{ steps.manifest.outputs.manifest_path }}
+          if-no-files-found: error
+          retention-days: ${{ steps.payload.outputs.artifact_retention }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.manifest.outputs.build_artifact_name }}
+          path: ${{ steps.manifest.outputs.artifact_paths }}
+          if-no-files-found: error
+          retention-days: ${{ steps.payload.outputs.artifact_retention }}
+
+      - name: Invoke callback
+        if: always()
+        run: node dist/src/runner.js callback payload.json .runner-output
+        env:
+          AUTO_BUILD_CALLBACK_SECRET: ${{ secrets.AUTO_BUILD_CALLBACK_SECRET }}
+          JOB_STATUS: ${{ job.status }}

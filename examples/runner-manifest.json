@@ -1,0 +1,23 @@
+{
+  "run_id": "example123",
+  "project_id": "project123",
+  "channel": "stable",
+  "source_mode": "branch",
+  "source_identifier": "main",
+  "source_commit_sha": "abcdef1234567890abcdef1234567890abcdef12",
+  "build_profile": "default",
+  "version": "1-0-0",
+  "name": "Example Plugin",
+  "changelog": "Initial release via auto-build",
+  "minecraft_versions": ["1.21"],
+  "platforms": ["paper"],
+  "artifacts": [
+    {
+      "name": "plugin-1.0.0.jar",
+      "url": "https://example.com/artifacts/plugin-1.0.0.jar",
+      "sha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 1024
+    }
+  ]
+}

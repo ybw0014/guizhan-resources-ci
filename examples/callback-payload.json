@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "run_id": "example123",
+  "config_id": "config123",
+  "project_id": "project123",
+  "idempotency_key": "auto-build-example-project001-stable-branch-main-abcdef1",
+  "runner_repo": "owner/runner-repo",
+  "runner_workflow": "build.yml",
+  "workflow_run_id": 12345678,
+  "workflow_attempt": 1,
+  "conclusion": "success",
+  "manifest_artifact_name": "manifest.json",
+  "manifest_artifact_id": 87654321,
+  "artifact_names": ["plugin-1.0.0.jar"]
+}
