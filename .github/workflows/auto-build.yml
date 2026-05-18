@@ -63,6 +63,7 @@ jobs:
         uses: s4u/setup-maven-action@v1.18.0
         with:
           maven-version: ${{ steps.payload.outputs.maven_version }}
+          checkout-enabled: false
 
       - name: Run SDKMAN custom setup
         if: steps.payload.outputs.sdkman_custom != ''
