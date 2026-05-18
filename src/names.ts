@@ -3,5 +3,7 @@ export function generateRunName(idempotencyKey: string, runId: string): string {
 }
 
 export function generateArtifactName(idempotencyKey: string, name: string): string {
-  return `${idempotencyKey}-${name}`
+  const safeKey = idempotencyKey.replace(/[\\/:*?"<>|]/g, "-")
+
+  return `${safeKey}-${name}`
 }
