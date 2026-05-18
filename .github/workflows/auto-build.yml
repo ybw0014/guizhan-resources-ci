@@ -64,6 +64,8 @@ jobs:
         with:
           maven-version: ${{ steps.payload.outputs.maven_version }}
           checkout-enabled: false
+          java-version: ${{ steps.payload.outputs.java_version }}
+          java-distribution: temurin
 
       - name: Run SDKMAN custom setup
         if: steps.payload.outputs.sdkman_custom != ''
