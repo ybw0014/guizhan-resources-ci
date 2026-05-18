@@ -10,7 +10,7 @@ Defined in `src/schema.ts` as `buildPayloadSchema`.
 
 - `schema_version`: Must be 1.
 - `run_id`: Unique identifier for the build run (alphanumeric).
-- `config_id`: Auto-build configuration identifier.
+- `profile_id`: Auto-build profile identifier.
 - `project_id`: Project identifier.
 - `channel`: Channel name (e.g., "stable").
 - `idempotency_key`: Unique key to prevent duplicate builds.
@@ -42,7 +42,7 @@ Callback requests must be signed with HMAC-SHA256:
 
 Defined in `src/schema.ts` as `callbackPayloadSchema`.
 
-- Contains `run_id`, `config_id`, `project_id`, `conclusion`, and artifact references.
+- Contains `run_id`, `profile_id`, `project_id`, `conclusion`, and artifact references.
 
 ## Failure Mapping
 

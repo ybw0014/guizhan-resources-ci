@@ -22,7 +22,7 @@ const buildCommandSchema = z
 export const buildPayloadSchema = z.object({
   schema_version: z.literal(1),
   run_id: z.string().min(1).max(32).regex(alphanumericRegex),
-  config_id: z.string().min(1).max(32).regex(alphanumericRegex),
+  profile_id: z.string().min(1).max(32).regex(alphanumericRegex),
   project_id: z.string().min(1).max(32).regex(alphanumericRegex),
   channel: z.string().min(1).max(64),
   idempotency_key: z.string().min(1).max(128),
@@ -44,7 +44,7 @@ export const buildPayloadSchema = z.object({
 export const callbackPayloadSchema = z.object({
   schema_version: z.literal(1),
   run_id: z.string().min(1).max(32).regex(alphanumericRegex),
-  config_id: z.string().min(1).max(32).regex(alphanumericRegex),
+  profile_id: z.string().min(1).max(32).regex(alphanumericRegex),
   project_id: z.string().min(1).max(32).regex(alphanumericRegex),
   idempotency_key: z.string().min(1).max(128),
   runner_repo: z.string().min(1).max(255).regex(githubRepoRegex),

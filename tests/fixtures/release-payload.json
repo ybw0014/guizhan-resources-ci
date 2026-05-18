@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "runrelease001",
-  "config_id": "config001",
+  "profile_id": "config001",
   "project_id": "project001",
   "channel": "stable",
   "idempotency_key": "auto-build-project001-stable-release-v1-0-0-1234567",

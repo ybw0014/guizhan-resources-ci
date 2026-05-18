@@ -89,7 +89,7 @@ describe("cross-repo runner contract", () => {
     })
     expect(callbackPayloadSchema.parse(callbackPayload)).toMatchObject({
       run_id: payload.run_id,
-      config_id: payload.config_id,
+      profile_id: payload.profile_id,
       project_id: payload.project_id,
       conclusion: "success",
       manifest_artifact_id: 456789,

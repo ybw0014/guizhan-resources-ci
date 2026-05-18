@@ -10,7 +10,7 @@ import tagPayload from "./fixtures/tag-payload.json" with { type: "json" }
 const successCallbackPayload = {
   schema_version: 1,
   run_id: "runbranch001",
-  config_id: "config001",
+  profile_id: "config001",
   project_id: "project001",
   idempotency_key: "auto-build-project001-stable-branch-main-abcdef1",
   runner_repo: "ybw0014/guizhan-resources-ci",
@@ -26,7 +26,7 @@ const successCallbackPayload = {
 const failureCallbackPayload = {
   schema_version: 1,
   run_id: "runbranch001",
-  config_id: "config001",
+  profile_id: "config001",
   project_id: "project001",
   idempotency_key: "auto-build-project001-stable-branch-main-abcdef1",
   runner_repo: "ybw0014/guizhan-resources-ci",
@@ -71,7 +71,7 @@ describe("buildPayloadSchema", () => {
     expect(payload).toMatchObject({
       schema_version: 1,
       run_id: "runbranch001",
-      config_id: "config001",
+      profile_id: "config001",
       project_id: "project001",
       channel: "stable",
       idempotency_key: "auto-build-project001-stable-branch-main-abcdef1",

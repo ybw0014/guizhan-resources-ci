@@ -19,7 +19,7 @@ export function createCallbackPayload(
   const callbackPayload = {
     schema_version: 1,
     run_id: payload.run_id,
-    config_id: payload.config_id,
+    profile_id: payload.profile_id,
     project_id: payload.project_id,
     idempotency_key: payload.idempotency_key,
     runner_repo: payload.runner_repo,
