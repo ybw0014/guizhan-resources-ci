@@ -45,7 +45,7 @@ const manifestPayload = {
   channel: "stable",
   source_mode: "branch",
   source_identifier: "main",
-  source_commit_sha: "abcdef1234567890",
+  source_commit_sha: "abcdef1234567890abcdef1234567890abcdef12",
   build_profile: "default",
   version: "1-0-0",
   name: "Example Plugin",
@@ -78,13 +78,14 @@ describe("buildPayloadSchema", () => {
       source_repo: "ybw0014/example-plugin",
       source_mode: "branch",
       source_identifier: "main",
-      source_commit_sha: "abcdef1234567890",
+      source_commit_sha: "abcdef1234567890abcdef1234567890abcdef12",
       build_profile: "default",
       runner_repo: "ybw0014/guizhan-resources-ci",
       runner_workflow: "build.yml",
       build_command: "mvn package",
-      java_version: "21",
-      maven_version: "3.9",
+      java_version: "25",
+      maven_version: "3.9.9",
+      pnpm_version: "11.1.2",
       callback_url: "https://resources.guizhan.example/api/auto-build/callback",
       artifact_retention: 7,
     })
@@ -103,6 +104,45 @@ describe("buildPayloadSchema", () => {
 
     expect(result.success).toBe(false)
     expect(result.error?.issues.some((issue) => issue.path.includes("build_command"))).toBe(true)
+  })
+
+  it("rejects a short source commit SHA", () => {
+    const result = buildPayloadSchema.safeParse({
+      ...branchPayload,
+      source_commit_sha: "abcdef1234567890",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.issues.some((issue) => issue.path.includes("source_commit_sha"))).toBe(true)
+  })
+
+  it("accepts a single SDKMAN install or use command", () => {
+    const result = buildPayloadSchema.safeParse({
+      ...branchPayload,
+      sdkman_custom: "sdk install java 25-tem",
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  it("rejects SDKMAN shell syntax", () => {
+    const result = buildPayloadSchema.safeParse({
+      ...branchPayload,
+      sdkman_custom: "sdk install java 25-tem; curl https://evil.example",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.issues.some((issue) => issue.path.includes("sdkman_custom"))).toBe(true)
+  })
+
+  it("rejects unsupported SDKMAN candidates", () => {
+    const result = buildPayloadSchema.safeParse({
+      ...branchPayload,
+      sdkman_custom: "sdk install groovy 4.0.0",
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.issues.some((issue) => issue.path.includes("sdkman_custom"))).toBe(true)
   })
 })
 

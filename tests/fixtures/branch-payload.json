@@ -8,12 +8,13 @@
   "source_repo": "ybw0014/example-plugin",
   "source_mode": "branch",
   "source_identifier": "main",
-  "source_commit_sha": "abcdef1234567890",
+  "source_commit_sha": "abcdef1234567890abcdef1234567890abcdef12",
   "build_profile": "default",
   "runner_repo": "ybw0014/guizhan-resources-ci",
   "runner_workflow": "build.yml",
   "build_command": "mvn package",
-  "java_version": "21",
-  "maven_version": "3.9",
+  "java_version": "25",
+  "maven_version": "3.9.9",
+  "pnpm_version": "11.1.2",
   "callback_url": "https://resources.guizhan.example/api/auto-build/callback"
 }
