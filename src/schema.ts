@@ -19,6 +19,15 @@ const buildCommandSchema = z
     message: "Build command contains disallowed shell syntax",
   })
 
+const sdkmanCommandSchema = z
+  .string()
+  .max(1000)
+  .refine(
+    (value) =>
+      value.trim() === "" || /^sdk\s+(?:install|use)\s+(?:java|maven|gradle)(?:\s+[a-zA-Z0-9._+-]+)?$/.test(value.trim()),
+    { message: "SDKMAN command must be a single sdk install/use command for java, maven, or gradle" }
+  )
+
 export const buildPayloadSchema = z.object({
   schema_version: z.literal(1),
   run_id: z.string().min(1).max(32).regex(alphanumericRegex),
@@ -29,14 +38,15 @@ export const buildPayloadSchema = z.object({
   source_repo: z.string().min(1).max(255).regex(githubRepoRegex),
   source_mode: sourceModeSchema,
   source_identifier: z.string().min(1).max(255),
-  source_commit_sha: z.string().min(7).max(64),
+  source_commit_sha: z.string().length(40).regex(hexRegex),
   build_profile: z.string().min(1).max(64),
   runner_repo: z.string().min(1).max(255).regex(githubRepoRegex),
   runner_workflow: z.string().min(1).max(255),
   build_command: buildCommandSchema,
   java_version: z.string().min(1).max(32),
   maven_version: z.string().min(1).max(32),
-  sdkman_custom: z.string().max(1000).optional(),
+  pnpm_version: z.string().min(1).max(32),
+  sdkman_custom: sdkmanCommandSchema.optional(),
   callback_url: z.url({ protocol: httpProtocolRegex }).max(2048),
   artifact_retention: z.number().int().min(1).default(7),
 })
@@ -72,7 +82,7 @@ export const runnerManifestSchema = z.object({
   channel: z.string().min(1).max(64),
   source_mode: sourceModeSchema,
   source_identifier: z.string().min(1).max(255),
-  source_commit_sha: z.string().min(7).max(64),
+  source_commit_sha: z.string().length(40).regex(hexRegex),
   build_profile: z.string().min(1).max(64),
   version: z.string().min(1).max(32).regex(urlSafeRegex),
   name: z.string().min(1).max(64),
