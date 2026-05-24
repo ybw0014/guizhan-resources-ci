@@ -5,7 +5,7 @@ import { writeManifestAndMetadata, RunnerArtifactMetadata } from "./artifacts.js
 import { createCallbackPayload, sendCallback } from "./callback.js"
 import { createCheckoutConfig, parseBuildPayload } from "./checkout.js"
 import { executeBuildCommand } from "./command.js"
-import { generateRunName } from "./names.js"
+import { generateArtifactName, generateRunName } from "./names.js"
 import { BuildPayload } from "./schema.js"
 import { createToolchainConfig } from "./toolchain.js"
 
@@ -50,8 +50,11 @@ export async function validatePayload(rawPayload: string, payloadPath = "payload
     source_commit_sha: checkout.ref,
     java_version: toolchain.javaVersion,
     maven_version: toolchain.mavenVersion,
+    pnpm_version: toolchain.pnpmVersion,
     sdkman_custom: toolchain.sdkmanCustom ?? "",
     artifact_retention: getArtifactRetentionDays(payload),
+    manifest_artifact_name: generateArtifactName(payload.idempotency_key, "manifest"),
+    build_artifact_name: generateArtifactName(payload.idempotency_key, "build-artifacts"),
   })
 
   return payload

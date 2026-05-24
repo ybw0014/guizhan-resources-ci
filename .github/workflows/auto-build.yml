@@ -15,9 +15,18 @@ permissions:
   actions: read
 
 jobs:
-  build:
+  prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
+    outputs:
+      source_repo: ${{ steps.payload.outputs.source_repo }}
+      source_commit_sha: ${{ steps.payload.outputs.source_commit_sha }}
+      java_version: ${{ steps.payload.outputs.java_version }}
+      maven_version: ${{ steps.payload.outputs.maven_version }}
+      sdkman_custom: ${{ steps.payload.outputs.sdkman_custom }}
+      artifact_retention: ${{ steps.payload.outputs.artifact_retention }}
+      manifest_artifact_name: ${{ steps.payload.outputs.manifest_artifact_name }}
+      build_artifact_name: ${{ steps.payload.outputs.build_artifact_name }}
     steps:
       - name: Checking out runner repository
         uses: actions/checkout@v6
@@ -45,11 +54,41 @@ jobs:
         env:
           BUILD_PAYLOAD: ${{ inputs.build_payload }}
 
+  build:
+    runs-on: ubuntu-latest
+    needs: prepare
+    timeout-minutes: 30
+    steps:
+      - name: Checking out runner repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "25.8.2"
+          cache: "pnpm"
+
+      - name: Install runner dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compile runner scripts
+        run: pnpm exec tsc --outDir dist --declaration false --declarationMap false
+
+      - name: Validate build payload
+        run: node dist/src/runner.js validate
+        env:
+          BUILD_PAYLOAD: ${{ inputs.build_payload }}
+
       - name: Checking out source repository
         uses: actions/checkout@v6
         with:
-          repository: ${{ steps.payload.outputs.source_repo }}
-          ref: ${{ steps.payload.outputs.source_commit_sha }}
+          repository: ${{ needs.prepare.outputs.source_repo }}
+          ref: ${{ needs.prepare.outputs.source_commit_sha }}
           path: source
           persist-credentials: false
 
@@ -57,48 +96,102 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: ${{ steps.payload.outputs.java_version }}
+          java-version: ${{ needs.prepare.outputs.java_version }}
 
       - name: Setup Maven
         uses: s4u/setup-maven-action@v1.18.0
         with:
-          maven-version: ${{ steps.payload.outputs.maven_version }}
+          maven-version: ${{ needs.prepare.outputs.maven_version }}
           checkout-enabled: false
-          java-version: ${{ steps.payload.outputs.java_version }}
+          java-version: ${{ needs.prepare.outputs.java_version }}
           java-distribution: temurin
 
       - name: Run SDKMAN custom setup
-        if: steps.payload.outputs.sdkman_custom != ''
+        if: needs.prepare.outputs.sdkman_custom != ''
         run: node dist/src/toolchain.js
         env:
-          SDKMAN_CUSTOM: ${{ steps.payload.outputs.sdkman_custom }}
+          SDKMAN_CUSTOM: ${{ needs.prepare.outputs.sdkman_custom }}
 
       - name: Run explicit build command
         run: node dist/src/runner.js build payload.json source
 
-      - name: Generate manifest
-        id: manifest
-        run: node dist/src/runner.js manifest payload.json source .runner-output
-
-      - name: Upload manifest
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.manifest.outputs.manifest_artifact_name }}
-          path: ${{ steps.manifest.outputs.manifest_path }}
-          if-no-files-found: error
-          retention-days: ${{ steps.payload.outputs.artifact_retention }}
+      - name: Stage build artifacts
+        run: |
+          rm -rf artifact-source
+          mkdir -p artifact-source
+          if [ -d source/target ]; then
+            mkdir -p artifact-source/target
+            cp -R source/target/. artifact-source/target/
+          fi
+          if [ -d source/build/libs ]; then
+            mkdir -p artifact-source/build/libs
+            cp -R source/build/libs/. artifact-source/build/libs/
+          fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.manifest.outputs.build_artifact_name }}
-          path: ${{ steps.manifest.outputs.artifact_paths }}
+          name: ${{ needs.prepare.outputs.build_artifact_name }}
+          path: artifact-source
           if-no-files-found: error
-          retention-days: ${{ steps.payload.outputs.artifact_retention }}
+          retention-days: ${{ needs.prepare.outputs.artifact_retention }}
+
+  finalize:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build
+    if: always() && needs.prepare.result == 'success'
+    timeout-minutes: 10
+    steps:
+      - name: Checking out runner repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "25.8.2"
+          cache: "pnpm"
+
+      - name: Install runner dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compile runner scripts
+        run: pnpm exec tsc --outDir dist --declaration false --declarationMap false
+
+      - name: Validate build payload
+        run: node dist/src/runner.js validate
+        env:
+          BUILD_PAYLOAD: ${{ inputs.build_payload }}
+
+      - name: Download build artifacts
+        if: needs.build.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.build_artifact_name }}
+          path: artifact-source
+
+      - name: Generate manifest
+        if: needs.build.result == 'success'
+        run: node dist/src/runner.js manifest payload.json artifact-source .runner-output
+
+      - name: Upload manifest
+        if: needs.build.result == 'success' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.manifest_artifact_name }}
+          path: .runner-output/manifest.json
+          if-no-files-found: error
+          retention-days: ${{ needs.prepare.outputs.artifact_retention }}
 
       - name: Invoke callback
         if: always()
         run: node dist/src/runner.js callback payload.json .runner-output
         env:
           AUTO_BUILD_CALLBACK_SECRET: ${{ secrets.AUTO_BUILD_CALLBACK_SECRET }}
-          JOB_STATUS: ${{ job.status }}
+          JOB_STATUS: ${{ needs.build.result == 'success' && job.status || needs.build.result }}

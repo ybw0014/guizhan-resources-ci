@@ -8,6 +8,10 @@ const BLOCKED_BUILD_ENV_KEYS = new Set([
   "GITHUB_TOKEN",
   "ACTIONS_RUNTIME_TOKEN",
   "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+  "GITHUB_ENV",
+  "GITHUB_OUTPUT",
+  "GITHUB_PATH",
+  "GITHUB_STEP_SUMMARY",
 ])
 
 export function sanitizeBuildEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -72,6 +76,8 @@ export async function executeBuildCommand(
   env: NodeJS.ProcessEnv = process.env
 ): Promise<void> {
   const [command, ...args] = splitBuildCommand(payload.build_command)
+
+  console.log(`Executing build command: ${payload.build_command}`)
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, {
