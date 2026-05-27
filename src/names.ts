@@ -1,5 +1,5 @@
 export function generateRunName(idempotencyKey: string, runId: string): string {
-  return `guizhan-resources-${idempotencyKey}-${runId}`
+  return `Auto Build ${runId} ${idempotencyKey}`
 }
 
 export function generateArtifactName(idempotencyKey: string, name: string): string {

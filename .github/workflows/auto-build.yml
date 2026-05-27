@@ -1,6 +1,6 @@
 name: Auto Build
 
-run-name: Auto Build ${{ fromJson(inputs.build_payload).run_id }} ${{ fromJson(inputs.build_payload).idempotency_key }}
+run-name: "Auto Build ${{ fromJson(inputs.build_payload).run_id }} ${{ fromJson(inputs.build_payload).idempotency_key }}"
 
 on:
   workflow_dispatch:

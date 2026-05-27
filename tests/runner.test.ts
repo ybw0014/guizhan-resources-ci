@@ -77,8 +77,7 @@ describe("runner payload validation", () => {
     const output = await readFile(outputPath, "utf8")
     const expectedRunName = generateRunName(branchPayload.idempotency_key, branchPayload.run_id)
 
-    expect(expectedRunName).toContain(branchPayload.idempotency_key)
-    expect(expectedRunName).toContain(branchPayload.run_id)
+    expect(expectedRunName).toBe(`Auto Build ${branchPayload.run_id} ${branchPayload.idempotency_key}`)
     expect(output).toContain(`run_name=${expectedRunName}`)
   })
 })
