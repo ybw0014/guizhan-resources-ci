@@ -14,7 +14,7 @@ import branchPayload from "./fixtures/branch-payload.json" with { type: "json" }
 const ciRepoRoot = fileURLToPath(new URL("..", import.meta.url))
 const parentRepoRoot = path.resolve(ciRepoRoot, "..")
 const fixtureProject = path.join(ciRepoRoot, "tests", "fixtures", "java-maven-project")
-const evidenceDirectory = process.env.SISYPHUS_EVIDENCE_DIR ?? path.join(parentRepoRoot, ".sisyphus", "evidence")
+const evidenceDirectory = process.env.SISYPHUS_EVIDENCE_DIR ?? path.join(parentRepoRoot, ".omo", "evidence")
 const tempDirectories: string[] = []
 
 async function createTempDirectory() {
