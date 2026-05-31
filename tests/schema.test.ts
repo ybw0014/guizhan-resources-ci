@@ -86,7 +86,7 @@ describe("buildPayloadSchema", () => {
       java_version: "25",
       maven_version: "3.9.9",
       pnpm_version: "11.1.2",
-      callback_url: "https://resources.guizhan.example/api/auto-build/callback",
+      callback_url: "https://resources.guizhan.example/v1/projects/project001/automation/runs/runbranch001/callback",
       artifact_retention: 7,
     })
   })
