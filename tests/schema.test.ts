@@ -167,6 +167,12 @@ describe("runnerManifestSchema", () => {
       size: 1024,
     })
   })
+
+  it("accepts omitted Minecraft versions so ingestion can use channel defaults", () => {
+    const { minecraft_versions: _minecraftVersions, ...manifestWithoutMinecraftVersions } = manifestPayload
+
+    expect(runnerManifestSchema.parse(manifestWithoutMinecraftVersions).minecraft_versions).toBeUndefined()
+  })
 })
 
 describe("name helpers", () => {

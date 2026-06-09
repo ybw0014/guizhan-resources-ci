@@ -71,6 +71,7 @@ describe("manifest generation", () => {
     const manifest = await createRunnerManifest(payload, [artifactPath], "https://github.com/ybw0014/run/artifacts")
 
     expect(runnerManifestSchema.parse(manifest)).toEqual(manifest)
+    expect(manifest.minecraft_versions).toBeUndefined()
     expect(manifest).toMatchObject({
       run_id: payload.run_id,
       project_id: payload.project_id,

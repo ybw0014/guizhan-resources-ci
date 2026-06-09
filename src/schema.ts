@@ -87,7 +87,7 @@ export const runnerManifestSchema = z.object({
   version: z.string().min(1).max(32).regex(urlSafeRegex),
   name: z.string().min(1).max(64),
   changelog: z.string().max(10000).optional(),
-  minecraft_versions: z.array(z.string()).min(1),
+  minecraft_versions: z.array(z.string()).min(1).optional(),
   platforms: z.array(platformSchema).min(1).max(10),
   dependencies: z.array(z.unknown()).optional(),
   artifacts: z.array(artifactSchema).min(1),

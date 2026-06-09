@@ -115,7 +115,6 @@ export async function createRunnerManifest(
     version: createManifestVersion(payload),
     name: `Auto Build ${payload.source_identifier}`,
     changelog: `Built from ${payload.source_repo}@${payload.source_commit_sha}`,
-    minecraft_versions: ["unknown"],
     platforms: ["paper"],
     dependencies: [],
     artifacts: artifacts.map((artifact) => ({
