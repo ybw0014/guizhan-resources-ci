@@ -6,6 +6,7 @@ import { createCallbackPayload, sendCallback } from "./callback.js"
 import { createCheckoutConfig, parseBuildPayload } from "./checkout.js"
 import { executeBuildCommand } from "./command.js"
 import { generateArtifactName, generateRunName } from "./names.js"
+import { BuildPayloadSignatureInput, verifyBuildPayloadSignature } from "./payload-signature.js"
 import { BuildPayload } from "./schema.js"
 import { createToolchainConfig } from "./toolchain.js"
 
@@ -36,7 +37,17 @@ async function appendGithubOutput(outputs: Record<string, string | number | unde
   await writeFile(outputPath, content, { flag: "a" })
 }
 
-export async function validatePayload(rawPayload: string, payloadPath = "payload.json") {
+export async function validatePayload(
+  rawPayload: string,
+  payloadPath = "payload.json",
+  signatureInput: BuildPayloadSignatureInput = {
+    secret: process.env.AUTO_BUILD_CALLBACK_SECRET,
+    timestamp: process.env.BUILD_PAYLOAD_TIMESTAMP,
+    signature: process.env.BUILD_PAYLOAD_SIGNATURE,
+  }
+) {
+  verifyBuildPayloadSignature(rawPayload, signatureInput)
+
   const payload = parseBuildPayload(rawPayload)
   const checkout = createCheckoutConfig(payload)
   const toolchain = createToolchainConfig(payload)

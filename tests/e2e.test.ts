@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto"
+import { createHash, createHmac } from "node:crypto"
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
@@ -16,6 +16,15 @@ const parentRepoRoot = path.resolve(ciRepoRoot, "..")
 const fixtureProject = path.join(ciRepoRoot, "tests", "fixtures", "java-maven-project")
 const evidenceDirectory = process.env.SISYPHUS_EVIDENCE_DIR ?? path.join(parentRepoRoot, ".omo", "evidence")
 const tempDirectories: string[] = []
+const payloadSecret = "test-build-payload-secret"
+
+function signPayload(rawPayload: string, timestamp = "1700000000") {
+  return {
+    secret: payloadSecret,
+    timestamp,
+    signature: `sha256=${createHmac("sha256", payloadSecret).update(`${timestamp}.${rawPayload}`).digest("hex")}`,
+  }
+}
 
 async function createTempDirectory() {
   const directory = await mkdtemp(path.join(tmpdir(), "guizhan-ci-e2e-"))
@@ -53,7 +62,8 @@ describe("cross-repo runner contract", () => {
     const payloadPath = await writePayload(directory, payload)
 
     await cp(fixtureProject, sourceDirectory, { recursive: true })
-    await validatePayload(JSON.stringify(payload), payloadPath)
+    const rawPayload = JSON.stringify(payload)
+    await validatePayload(rawPayload, payloadPath, signPayload(rawPayload))
     await runBuild(payloadPath, sourceDirectory)
     const metadata = await generateManifest(payloadPath, sourceDirectory, outputDirectory)
     const manifest = runnerManifestSchema.parse(

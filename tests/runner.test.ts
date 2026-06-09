@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto"
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
@@ -16,12 +17,21 @@ const originalGithubOutput = process.env.GITHUB_OUTPUT
 const originalCallbackSecret = process.env.AUTO_BUILD_CALLBACK_SECRET
 const originalGithubToken = process.env.GITHUB_TOKEN
 const originalActionsRuntimeToken = process.env.ACTIONS_RUNTIME_TOKEN
+const payloadSecret = "test-build-payload-secret"
 
 async function createTempDirectory() {
   const directory = await mkdtemp(path.join(tmpdir(), "guizhan-ci-runner-"))
   tempDirectories.push(directory)
 
   return directory
+}
+
+function signPayload(rawPayload: string, timestamp = "1700000000", secret = payloadSecret) {
+  return {
+    secret,
+    timestamp,
+    signature: `sha256=${createHmac("sha256", secret).update(`${timestamp}.${rawPayload}`).digest("hex")}`,
+  }
 }
 
 async function writePayload(directory: string, payload: BuildPayload) {
@@ -48,7 +58,8 @@ describe("runner payload validation", () => {
     const outputPath = path.join(directory, "github-output.txt")
     process.env.GITHUB_OUTPUT = outputPath
 
-    const payload = await validatePayload(JSON.stringify(branchPayload), payloadPath)
+    const rawPayload = JSON.stringify(branchPayload)
+    const payload = await validatePayload(rawPayload, payloadPath, signPayload(rawPayload))
     const output = await readFile(outputPath, "utf8")
 
     expect(payload.source_repo).toBe(branchPayload.source_repo)
@@ -63,8 +74,22 @@ describe("runner payload validation", () => {
     const outputPath = path.join(directory, "github-output.txt")
     process.env.GITHUB_OUTPUT = outputPath
 
-    await expect(validatePayload(JSON.stringify(invalidCommandPayload), payloadPath)).rejects.toThrow()
+    const rawPayload = JSON.stringify(invalidCommandPayload)
+
+    await expect(validatePayload(rawPayload, payloadPath, signPayload(rawPayload))).rejects.toThrow()
     await expect(readFile(outputPath, "utf8")).rejects.toThrow()
+  })
+
+  it("rejects missing and tampered build payload signatures", async () => {
+    const directory = await createTempDirectory()
+    const payloadPath = path.join(directory, "payload.json")
+    const rawPayload = JSON.stringify(branchPayload)
+
+    await expect(validatePayload(rawPayload, payloadPath)).rejects.toThrow("BUILD_PAYLOAD_TIMESTAMP")
+    await expect(validatePayload(rawPayload, payloadPath, signPayload(JSON.stringify({ ...branchPayload, run_id: "tampered" })))).rejects.toThrow(
+      "Invalid build payload signature"
+    )
+    await expect(readFile(payloadPath, "utf8")).rejects.toThrow()
   })
 
   it("workflow run-name includes run_id and idempotency_key", async () => {
@@ -72,7 +97,8 @@ describe("runner payload validation", () => {
     const outputPath = path.join(directory, "github-output.txt")
     process.env.GITHUB_OUTPUT = outputPath
 
-    await validatePayload(JSON.stringify(branchPayload), path.join(directory, "payload.json"))
+    const rawPayload = JSON.stringify(branchPayload)
+    await validatePayload(rawPayload, path.join(directory, "payload.json"), signPayload(rawPayload))
 
     const output = await readFile(outputPath, "utf8")
     const expectedRunName = generateRunName(branchPayload.idempotency_key, branchPayload.run_id)
@@ -133,6 +159,7 @@ describe("runner build and manifest orchestration", () => {
     expect(metadata.manifestArtifactName).toBe(generateArtifactName(payload.idempotency_key, "manifest"))
     expect(metadata.buildArtifactName).toBe(generateArtifactName(payload.idempotency_key, "build-artifacts"))
     expect(metadata.artifactPaths).toHaveLength(1)
+    expect(manifest.minecraft_versions).toBeUndefined()
     expect(manifest).toMatchObject({
       run_id: payload.run_id,
       project_id: payload.project_id,
