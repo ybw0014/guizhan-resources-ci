@@ -11,16 +11,16 @@ This repository provides the runner infrastructure and CI contract definitions f
 Install dependencies:
 
 ```bash
-pnpm install
+bun install
 ```
 
 Run verification:
 
 ```bash
-pnpm lint
-pnpm type-check
-pnpm test
-pnpm actionlint
+bun run lint
+bun run type-check
+bun run test
+bun run actionlint
 ```
 
 ## Contracts and Examples

@@ -41,20 +41,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Setup node
         uses: actions/setup-node@v6
         with:
           node-version: "25.8.2"
-          cache: "pnpm"
+          cache: "bun"
 
       - name: Install runner dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun ci
 
       - name: Compile runner scripts
-        run: pnpm exec tsc --outDir dist --declaration false --declarationMap false
+        run: bunx tsc --outDir dist --declaration false --declarationMap false
 
       - name: Validate build payload
         id: payload
@@ -75,20 +75,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Setup node
         uses: actions/setup-node@v6
         with:
           node-version: "25.8.2"
-          cache: "pnpm"
+          cache: "bun"
 
       - name: Install runner dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun ci
 
       - name: Compile runner scripts
-        run: pnpm exec tsc --outDir dist --declaration false --declarationMap false
+        run: bunx tsc --outDir dist --declaration false --declarationMap false
 
       - name: Validate build payload
         run: node dist/src/runner.js validate
@@ -163,20 +163,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Setup node
         uses: actions/setup-node@v6
         with:
           node-version: "25.8.2"
-          cache: "pnpm"
+          cache: "bun"
 
       - name: Install runner dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun ci
 
       - name: Compile runner scripts
-        run: pnpm exec tsc --outDir dist --declaration false --declarationMap false
+        run: bunx tsc --outDir dist --declaration false --declarationMap false
 
       - name: Validate build payload
         run: node dist/src/runner.js validate
