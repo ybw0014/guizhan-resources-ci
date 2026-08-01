@@ -37,17 +37,17 @@ jobs:
       build_artifact_name: ${{ steps.payload.outputs.build_artifact_name }}
     steps:
       - name: Checking out runner repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@v2.2.0
 
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7.0.0
         with:
-          node-version: "25.8.2"
+          node-version: "26.5.1"
           cache: "bun"
 
       - name: Install runner dependencies
@@ -71,17 +71,17 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checking out runner repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@v2.2.0
 
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7.0.0
         with:
-          node-version: "25.8.2"
+          node-version: "26.5.1"
           cache: "bun"
 
       - name: Install runner dependencies
@@ -99,7 +99,7 @@ jobs:
           AUTO_BUILD_CALLBACK_SECRET: ${{ secrets.AUTO_BUILD_CALLBACK_SECRET }}
 
       - name: Checking out source repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           repository: ${{ needs.prepare.outputs.source_repo }}
           ref: ${{ needs.prepare.outputs.source_commit_sha }}
@@ -159,17 +159,17 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checking out runner repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@v2.2.0
 
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7.0.0
         with:
-          node-version: "25.8.2"
+          node-version: "26.5.1"
           cache: "bun"
 
       - name: Install runner dependencies
