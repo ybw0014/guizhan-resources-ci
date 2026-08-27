@@ -48,7 +48,14 @@ jobs:
         uses: actions/setup-node@v7.0.0
         with:
           node-version: "26.5.1"
-          cache: "bun"
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
 
       - name: Install runner dependencies
         run: bun ci
@@ -82,7 +89,14 @@ jobs:
         uses: actions/setup-node@v7.0.0
         with:
           node-version: "26.5.1"
-          cache: "bun"
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
 
       - name: Install runner dependencies
         run: bun ci
@@ -170,7 +184,14 @@ jobs:
         uses: actions/setup-node@v7.0.0
         with:
           node-version: "26.5.1"
-          cache: "bun"
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
 
       - name: Install runner dependencies
         run: bun ci
