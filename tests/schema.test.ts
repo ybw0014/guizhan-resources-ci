@@ -179,7 +179,7 @@ describe("name helpers", () => {
   it("keep the run name free of user input and the artifact name keyed", () => {
     const idempotencyKey = "auto-build-project001-stable-branch-main-abcdef1"
 
-    expect(generateRunName("runbranch001")).toBe("Auto Build runbranch001")
+    expect(generateRunName("runbranch001")).toBe("Automation Run runbranch001")
     expect(generateRunName("runbranch001")).not.toContain(idempotencyKey)
     expect(generateArtifactName(idempotencyKey, "manifest.json")).toContain(idempotencyKey)
   })

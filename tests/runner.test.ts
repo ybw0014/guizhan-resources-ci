@@ -104,7 +104,7 @@ describe("runner payload validation", () => {
     const expectedRunName = generateRunName(branchPayload.run_id)
     const runNameLine = output.split("\n").find((line) => line.startsWith("run_name="))
 
-    expect(expectedRunName).toBe(`Auto Build ${branchPayload.run_id}`)
+    expect(expectedRunName).toBe(`Automation Run ${branchPayload.run_id}`)
     expect(runNameLine).toBe(`run_name=${expectedRunName}`)
   })
 })
