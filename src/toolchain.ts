@@ -18,7 +18,7 @@ export function createToolchainConfig(payload: BuildPayload): ToolchainConfig {
   }
 }
 
-function parseSdkmanCommand(command: string): ["install" | "use", "java" | "maven" | "gradle", string?] {
+export function parseSdkmanCommand(command: string): ["install" | "use", "java" | "maven" | "gradle", string?] {
   const match = command
     .trim()
     .match(/^sdk\s+(install|use)\s+(java|maven|gradle)(?:\s+([a-zA-Z0-9._+-]+))?$/)
@@ -30,10 +30,47 @@ function parseSdkmanCommand(command: string): ["install" | "use", "java" | "mave
   return [match[1] as "install" | "use", match[2] as "java" | "maven" | "gradle", match[3]]
 }
 
+export function createSdkmanSetupCommand() {
+  return [
+    "set -o pipefail",
+    "",
+    'sdkman_dir="${SDKMAN_DIR:-$HOME/.sdkman}"',
+    'sdkman_init="$sdkman_dir/bin/sdkman-init.sh"',
+    "",
+    'if [[ ! -f "$sdkman_init" ]]; then',
+    '  curl -fsSL "https://get.sdkman.io?ci=true&rcupdate=false" | bash || exit $?',
+    "fi",
+    "",
+    'source "$sdkman_init" || exit $?',
+    "",
+    'action="$1"',
+    'candidate="$2"',
+    'version="${3:-}"',
+    "",
+    'if [[ "$action" == "use" && -n "$version" ]]; then',
+    '  if [[ -z "${GITHUB_ENV:-}" || -z "${GITHUB_PATH:-}" ]]; then',
+    '    echo "GITHUB_ENV and GITHUB_PATH must be set to persist SDKMAN toolchain selection" >&2',
+    "    exit 1",
+    "  fi",
+    "",
+    '  sdk install "$candidate" "$version" || exit $?',
+    '  sdk use "$candidate" "$version" || exit $?',
+    "",
+    '  candidate_home="$sdkman_dir/candidates/$candidate/$version"',
+    '  upper_candidate="$(printf %s "$candidate" | tr "[:lower:]" "[:upper:]")"',
+    "  printf '%s_HOME=%s\\n' \"$upper_candidate\" \"$candidate_home\" >> \"$GITHUB_ENV\"",
+    "  printf '%s/bin\\n' \"$candidate_home\" >> \"$GITHUB_PATH\"",
+    'elif [[ -n "$version" ]]; then',
+    '  sdk "$action" "$candidate" "$version"',
+    "else",
+    '  sdk "$action" "$candidate"',
+    "fi",
+  ].join("\n")
+}
+
 export async function runSdkmanCustom(command: string): Promise<void> {
   const [action, candidate, version] = parseSdkmanCommand(command)
-  const sdkmanInit = "${SDKMAN_DIR:-$HOME/.sdkman}/bin/sdkman-init.sh"
-  const setupCommand = `source "${sdkmanInit}" && sdk "$@"`
+  const setupCommand = createSdkmanSetupCommand()
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn("bash", ["-lc", setupCommand, "sdkman", action, candidate, ...(version ? [version] : [])], {

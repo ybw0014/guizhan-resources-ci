@@ -54,7 +54,7 @@ export async function validatePayload(
 
   await writeFile(payloadPath, `${JSON.stringify(payload, null, 2)}\n`)
   await appendGithubOutput({
-    run_name: generateRunName(payload.idempotency_key, payload.run_id),
+    run_name: generateRunName(payload.run_id),
     run_id: payload.run_id,
     idempotency_key: payload.idempotency_key,
     source_repo: checkout.repository,

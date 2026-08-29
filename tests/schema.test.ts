@@ -176,12 +176,11 @@ describe("runnerManifestSchema", () => {
 })
 
 describe("name helpers", () => {
-  it("include idempotency key in run and artifact names", () => {
+  it("keep the run name free of user input and the artifact name keyed", () => {
     const idempotencyKey = "auto-build-project001-stable-branch-main-abcdef1"
 
-    expect(generateRunName(idempotencyKey, "runbranch001")).toBe(
-      "Auto Build runbranch001 auto-build-project001-stable-branch-main-abcdef1"
-    )
+    expect(generateRunName("runbranch001")).toBe("Auto Build runbranch001")
+    expect(generateRunName("runbranch001")).not.toContain(idempotencyKey)
     expect(generateArtifactName(idempotencyKey, "manifest.json")).toContain(idempotencyKey)
   })
 })

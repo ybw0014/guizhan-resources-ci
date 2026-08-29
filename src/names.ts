@@ -1,5 +1,5 @@
-export function generateRunName(idempotencyKey: string, runId: string): string {
-  return `Auto Build ${runId} ${idempotencyKey}`
+export function generateRunName(runId: string): string {
+  return `Auto Build ${runId}`
 }
 
 export function generateArtifactName(idempotencyKey: string, name: string): string {

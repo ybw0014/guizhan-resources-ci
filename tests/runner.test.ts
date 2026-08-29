@@ -92,7 +92,7 @@ describe("runner payload validation", () => {
     await expect(readFile(payloadPath, "utf8")).rejects.toThrow()
   })
 
-  it("workflow run-name includes run_id and idempotency_key", async () => {
+  it("workflow run-name includes only the run_id", async () => {
     const directory = await createTempDirectory()
     const outputPath = path.join(directory, "github-output.txt")
     process.env.GITHUB_OUTPUT = outputPath
@@ -101,10 +101,11 @@ describe("runner payload validation", () => {
     await validatePayload(rawPayload, path.join(directory, "payload.json"), signPayload(rawPayload))
 
     const output = await readFile(outputPath, "utf8")
-    const expectedRunName = generateRunName(branchPayload.idempotency_key, branchPayload.run_id)
+    const expectedRunName = generateRunName(branchPayload.run_id)
+    const runNameLine = output.split("\n").find((line) => line.startsWith("run_name="))
 
-    expect(expectedRunName).toBe(`Auto Build ${branchPayload.run_id} ${branchPayload.idempotency_key}`)
-    expect(output).toContain(`run_name=${expectedRunName}`)
+    expect(expectedRunName).toBe(`Auto Build ${branchPayload.run_id}`)
+    expect(runNameLine).toBe(`run_name=${expectedRunName}`)
   })
 })
 
