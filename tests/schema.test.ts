@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { generateArtifactName, generateRunName } from "../src/names.js"
+import { createManifestVersion } from "../src/artifacts.js"
 import { buildPayloadSchema, callbackPayloadSchema, runnerManifestSchema } from "../src/schema.js"
 import branchPayload from "./fixtures/branch-payload.json" with { type: "json" }
 import invalidCommandPayload from "./fixtures/invalid-command-payload.json" with { type: "json" }
@@ -89,6 +90,28 @@ describe("buildPayloadSchema", () => {
       callback_url: "https://resources.guizhan.example/v1/projects/project001/automation/runs/runbranch001/callback",
       artifact_retention: 7,
     })
+  })
+
+  it("keeps new payload metadata optional and accepts dot versions", () => {
+    expect(buildPayloadSchema.parse(branchPayload).source_commit_message).toBeUndefined()
+    expect(
+      buildPayloadSchema.parse({
+        ...branchPayload,
+        source_resolved_identifier: "v1.2.0",
+        source_commit_message: "feat: metadata",
+        channel_version_count: 0,
+        version_template: "{jar_version}",
+        name_template: "{identifier}",
+        changelog_template: "{commit_message}",
+      })
+    ).toMatchObject({ source_resolved_identifier: "v1.2.0", channel_version_count: 0 })
+    expect(runnerManifestSchema.safeParse({ ...manifestPayload, version: "1.0.0" }).success).toBe(true)
+  })
+
+  it("preserves legacy version sanitization", () => {
+    expect(createManifestVersion(buildPayloadSchema.parse({ ...branchPayload, source_identifier: "release/1.0.0" }))).toBe(
+      "branch-release-1-0-0-abcdef1"
+    )
   })
 
   it("parses a tag payload", () => {

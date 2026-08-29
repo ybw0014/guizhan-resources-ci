@@ -91,6 +91,11 @@ describe("cross-repo runner contract", () => {
     expect(metadata.manifestArtifactName).toContain(payload.idempotency_key)
     expect(metadata.buildArtifactName).toContain(payload.idempotency_key)
     expect(manifest.dependencies).toEqual([])
+    expect(manifest).toMatchObject({
+      version: "branch-main-abcdef1",
+      name: "Auto Build main",
+      changelog: `Built from ${payload.source_repo}@${payload.source_commit_sha}`,
+    })
     expect(manifest.artifacts[0]).toMatchObject({
       name: "java-maven-fixture.jar",
       sha1: createHash("sha1").update(artifactBytes).digest("hex"),

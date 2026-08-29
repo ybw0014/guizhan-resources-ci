@@ -3,7 +3,8 @@ import * as z from "zod/v4"
 const alphanumericRegex = /^[a-zA-Z0-9]+$/
 const githubRepoRegex = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/
 const httpProtocolRegex = /^https?$/
-const urlSafeRegex = /^[a-zA-Z0-9_-]+$/
+const urlSafeRegex = /^[a-zA-Z0-9!@$()`.+,_"-]*$/
+const visibleCharacterRegex = /^[^\p{Cc}\p{Cf}]+$/u
 const fileNameRegex = /^[^\\/:*?"<>|]+$/
 const hexRegex = /^[a-fA-F0-9]+$/
 
@@ -38,7 +39,10 @@ export const buildPayloadSchema = z.object({
   source_repo: z.string().min(1).max(255).regex(githubRepoRegex),
   source_mode: sourceModeSchema,
   source_identifier: z.string().min(1).max(255),
+  source_resolved_identifier: z.string().min(1).max(255).optional(),
   source_commit_sha: z.string().length(40).regex(hexRegex),
+  source_commit_message: z.string().max(10000).optional(),
+  channel_version_count: z.number().int().min(0).optional(),
   build_profile: z.string().min(1).max(64),
   runner_repo: z.string().min(1).max(255).regex(githubRepoRegex),
   runner_workflow: z.string().min(1).max(255),
@@ -47,6 +51,9 @@ export const buildPayloadSchema = z.object({
   maven_version: z.string().min(1).max(32),
   pnpm_version: z.string().min(1).max(32),
   sdkman_custom: sdkmanCommandSchema.optional(),
+  version_template: z.string().max(256).optional(),
+  name_template: z.string().max(512).optional(),
+  changelog_template: z.string().max(10000).optional(),
   callback_url: z.url({ protocol: httpProtocolRegex }).max(2048),
   artifact_retention: z.number().int().min(1).default(7),
 })
@@ -85,7 +92,7 @@ export const runnerManifestSchema = z.object({
   source_commit_sha: z.string().length(40).regex(hexRegex),
   build_profile: z.string().min(1).max(64),
   version: z.string().min(1).max(32).regex(urlSafeRegex),
-  name: z.string().min(1).max(64),
+  name: z.string().min(1).max(64).regex(visibleCharacterRegex),
   changelog: z.string().max(10000).optional(),
   minecraft_versions: z.array(z.string()).min(1).optional(),
   platforms: z.array(platformSchema).min(1).max(10),

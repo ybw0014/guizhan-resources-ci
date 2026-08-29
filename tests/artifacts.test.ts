@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
+import JSZip from "jszip"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { collectArtifactFiles, createRunnerManifest, hashArtifact, writeManifestAndMetadata } from "../src/artifacts.js"
@@ -17,6 +18,12 @@ async function createTempDirectory() {
   tempDirectories.push(directory)
 
   return directory
+}
+
+async function writeJar(filePath: string, files: Record<string, string>) {
+  const jar = new JSZip()
+  for (const [filename, content] of Object.entries(files)) jar.file(filename, content)
+  await writeFile(filePath, await jar.generateAsync({ type: "nodebuffer" }))
 }
 
 afterEach(async () => {
@@ -111,5 +118,95 @@ describe("manifest generation", () => {
     expect(metadata.buildArtifactName).toContain(payload.idempotency_key)
     expect(metadata.artifactNames).toEqual([metadata.buildArtifactName])
     expect(manifest.artifacts[0]?.name).toBe("plugin.jar")
+  })
+
+  it("uses primary JAR metadata and templates according to the fallback table", async () => {
+    const directory = await createTempDirectory()
+    const artifactPath = path.join(directory, "plugin.jar")
+    const payload = buildPayloadSchema.parse({
+      ...branchPayload,
+      source_resolved_identifier: "v1.2.0",
+      source_commit_message: "fix: metadata",
+      channel_version_count: 4,
+      version_template: "release-{channel_seq}-{jar_version}",
+      name_template: "{identifier} {profile}",
+      changelog_template: "{commit_message} {repo}",
+    })
+    await writeJar(artifactPath, { "plugin.yml": "name: Jar Plugin\nversion: 1.0.0\n" })
+
+    const manifest = await createRunnerManifest(payload, [artifactPath])
+
+    expect(manifest).toMatchObject({
+      version: "release-5-1.0.0",
+      name: "v1.2.0 default",
+      changelog: "fix: metadata ybw0014/example-plugin",
+    })
+  })
+
+  it("keeps legacy payloads on the complete legacy path despite JAR metadata", async () => {
+    const directory = await createTempDirectory()
+    const artifactPath = path.join(directory, "plugin.jar")
+    const payload = buildPayloadSchema.parse(branchPayload)
+    await writeJar(artifactPath, { "plugin.yml": "name: Jar Plugin\nversion: 1.0.0\n" })
+
+    await expect(createRunnerManifest(payload, [artifactPath])).resolves.toMatchObject({
+      version: "branch-main-abcdef1",
+      name: "Auto Build main",
+      changelog: `Built from ${payload.source_repo}@${payload.source_commit_sha}`,
+    })
+  })
+
+  it("falls back to valid JAR metadata, resolved identifiers, and legacy changelog", async () => {
+    const directory = await createTempDirectory()
+    const artifactPath = path.join(directory, "plugin.jar")
+    await writeJar(artifactPath, { "plugin.yml": "name: Jar Plugin\nversion: 1.0.0\n" })
+
+    const manifest = await createRunnerManifest(
+      buildPayloadSchema.parse({ ...branchPayload, source_resolved_identifier: "v1.2.0" }),
+      [artifactPath]
+    )
+
+    expect(manifest).toMatchObject({
+      version: "1.0.0",
+      name: "Jar Plugin",
+      changelog: `Built from ${branchPayload.source_repo}@${branchPayload.source_commit_sha}`,
+    })
+  })
+
+  it("uses legacy fallbacks for invalid JAR metadata and rejects invalid rendered templates", async () => {
+    const directory = await createTempDirectory()
+    const artifactPath = path.join(directory, "plugin.jar")
+    await writeJar(artifactPath, { "plugin.yml": "name: \nversion: invalid value\n" })
+    const payload = buildPayloadSchema.parse({ ...branchPayload, source_resolved_identifier: "v1.2.0" })
+
+    await expect(createRunnerManifest(payload, [artifactPath])).resolves.toMatchObject({
+      version: "branch-main-abcdef1",
+      name: "Auto Build v1.2.0",
+    })
+    await expect(createRunnerManifest(buildPayloadSchema.parse({ ...payload, version_template: "{jar_version}" }), [artifactPath])).rejects.toThrow(
+      "Rendered version template is invalid"
+    )
+    await expect(createRunnerManifest(buildPayloadSchema.parse({ ...payload, name_template: "   " }), [artifactPath])).rejects.toThrow(
+      "Rendered name template is invalid"
+    )
+    await expect(
+      createRunnerManifest(
+        buildPayloadSchema.parse({ ...payload, changelog_template: "{commit_message}x", source_commit_message: "x".repeat(10000) }),
+        [artifactPath]
+      )
+    ).rejects.toThrow("Rendered changelog template is too long")
+  })
+
+  it("rejects control characters from rendered names and falls back from invalid JAR names", async () => {
+    const directory = await createTempDirectory()
+    const artifactPath = path.join(directory, "plugin.jar")
+    const payload = buildPayloadSchema.parse({ ...branchPayload, source_resolved_identifier: "main", source_commit_message: "line\nbreak" })
+    await writeJar(artifactPath, { "plugin.yml": "name: Jar\nversion: 1.0.0\n" })
+
+    await expect(createRunnerManifest({ ...payload, name_template: "{commit_message}" }, [artifactPath])).rejects.toThrow(
+      "Rendered name template is invalid"
+    )
+    await writeJar(artifactPath, { "plugin.yml": "name: Bad\u0007Name\nversion: 1.0.0\n" })
+    await expect(createRunnerManifest(payload, [artifactPath])).resolves.toMatchObject({ name: "Auto Build main" })
   })
 })

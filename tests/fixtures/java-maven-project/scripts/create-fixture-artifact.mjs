@@ -1,13 +1,11 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 const projectRoot = process.cwd()
-const sourcePath = path.join(projectRoot, "src", "main", "java", "io", "github", "guizhan", "resources", "fixture", "ExamplePlugin.java")
-const pomPath = path.join(projectRoot, "pom.xml")
 const targetDirectory = path.join(projectRoot, "target")
 const artifactPath = path.join(targetDirectory, "java-maven-fixture.jar")
-const source = await readFile(sourcePath, "utf8")
-const pom = await readFile(pomPath, "utf8")
 
 await mkdir(targetDirectory, { recursive: true })
-await writeFile(artifactPath, `fixture jar\nsource:${source.length}\npom:${pom.length}\n`)
+const fixtureJar =
+  "UEsDBAoAAAAAANckHV3xy6qeIwAAACMAAAAKAAAAcGx1Z2luLnltbG5hbWU6IEV4YW1wbGVQbHVnaW4KdmVyc2lvbjogMS4wLjAKUEsDBAoAAAAAANckHV2sLGB1CAAAAAgAAAALAAAAZml4dHVyZS50eHRmaXh0dXJlClBLAQIUAAoAAAAAANckHV3xy6qeIwAAACMAAAAKAAAAAAAAAAAAAAAAAAAAAABwbHVnaW4ueW1sUEsBAhQACgAAAAAA1yQdXawsYHUIAAAACAAAAAsAAAAAAAAAAAAAAAAASwAAAGZpeHR1cmUudHh0UEsFBgAAAAACAAIAcQAAAHwAAAAAAA=="
+await writeFile(artifactPath, Buffer.from(fixtureJar, "base64"))

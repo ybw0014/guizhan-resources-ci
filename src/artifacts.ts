@@ -2,8 +2,10 @@ import { createHash } from "node:crypto"
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 
+import { readPrimaryJarMetadata } from "./jar-metadata.js"
 import { generateArtifactName } from "./names.js"
 import { BuildPayload, RunnerManifest, runnerManifestSchema } from "./schema.js"
+import { createTemplateValues, renderTemplate } from "./templates.js"
 
 export const DEFAULT_ARTIFACT_SEARCH_PATHS = ["target", "build/libs"]
 
@@ -94,6 +96,50 @@ export function createManifestVersion(payload: BuildPayload): string {
   return version || payload.source_commit_sha.slice(0, 7)
 }
 
+function isValidVersion(value: string) {
+  return /^[a-zA-Z0-9!@$()`.+,_"-]+$/.test(value) && value.length <= 32
+}
+
+function isValidName(value: string) {
+  return value.length >= 1 && value.length <= 64 && /^[^\p{Cc}\p{Cf}]+$/u.test(value)
+}
+
+function resolvedIdentifier(payload: BuildPayload) {
+  return payload.source_resolved_identifier ?? payload.source_identifier
+}
+
+function resolveManifestVersion(payload: BuildPayload, jarVersion: string | undefined, values: ReturnType<typeof createTemplateValues>) {
+  if (payload.version_template) {
+    const version = renderTemplate(payload.version_template, values).trim()
+    if (!isValidVersion(version)) throw new Error("Rendered version template is invalid")
+    return version
+  }
+
+  const version = jarVersion?.trim()
+  return version && isValidVersion(version) ? version : createManifestVersion(payload)
+}
+
+function resolveManifestName(payload: BuildPayload, jarName: string | undefined, values: ReturnType<typeof createTemplateValues>) {
+  if (payload.name_template) {
+    const name = renderTemplate(payload.name_template, values).trim()
+    if (!isValidName(name)) throw new Error("Rendered name template is invalid")
+    return name
+  }
+
+  const name = jarName?.trim()
+  return name && isValidName(name) ? name : `Auto Build ${resolvedIdentifier(payload)}`.slice(0, 64)
+}
+
+function resolveManifestChangelog(payload: BuildPayload, values: ReturnType<typeof createTemplateValues>) {
+  if (payload.changelog_template) {
+    const changelog = renderTemplate(payload.changelog_template, values)
+    if (changelog.length > 10000) throw new Error("Rendered changelog template is too long")
+    return changelog
+  }
+
+  return payload.source_commit_message || `Built from ${payload.source_repo}@${payload.source_commit_sha}`
+}
+
 export async function createRunnerManifest(
   payload: BuildPayload,
   artifactFiles: string[],
@@ -104,6 +150,33 @@ export async function createRunnerManifest(
   }
 
   const artifacts = await Promise.all(artifactFiles.map((file) => hashArtifact(file)))
+  const isMetadataCapable = payload.source_resolved_identifier !== undefined
+  if (!isMetadataCapable) {
+    return runnerManifestSchema.parse({
+      run_id: payload.run_id,
+      project_id: payload.project_id,
+      channel: payload.channel,
+      source_mode: payload.source_mode,
+      source_identifier: payload.source_identifier,
+      source_commit_sha: payload.source_commit_sha,
+      build_profile: payload.build_profile,
+      version: createManifestVersion(payload),
+      name: `Auto Build ${payload.source_identifier}`.slice(0, 64),
+      changelog: `Built from ${payload.source_repo}@${payload.source_commit_sha}`,
+      platforms: ["paper"],
+      dependencies: [],
+      artifacts: artifacts.map((artifact) => ({
+        name: artifact.name,
+        url: `${artifactBaseUrl}/${encodeURIComponent(artifact.name)}`,
+        sha1: artifact.sha1,
+        sha256: artifact.sha256,
+        size: artifact.size,
+      })),
+    })
+  }
+
+  const jarMetadata = await readPrimaryJarMetadata(artifactFiles)
+  const templateValues = createTemplateValues(payload, jarMetadata.version)
   const manifest = {
     run_id: payload.run_id,
     project_id: payload.project_id,
@@ -112,9 +185,9 @@ export async function createRunnerManifest(
     source_identifier: payload.source_identifier,
     source_commit_sha: payload.source_commit_sha,
     build_profile: payload.build_profile,
-    version: createManifestVersion(payload),
-    name: `Auto Build ${payload.source_identifier}`,
-    changelog: `Built from ${payload.source_repo}@${payload.source_commit_sha}`,
+    version: resolveManifestVersion(payload, jarMetadata.version, templateValues),
+    name: resolveManifestName(payload, jarMetadata.name, templateValues),
+    changelog: resolveManifestChangelog(payload, templateValues),
     platforms: ["paper"],
     dependencies: [],
     artifacts: artifacts.map((artifact) => ({
