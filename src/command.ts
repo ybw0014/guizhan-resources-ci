@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process"
+import { accessSync, chmodSync, constants, statSync } from "node:fs"
+import { resolve } from "node:path"
 
 import { BuildPayload } from "./schema.js"
 
@@ -70,12 +72,42 @@ export function splitBuildCommand(command: string): [string, ...string[]] {
   return parts as [string, ...string[]]
 }
 
+/**
+ * Ensure a relative-path build command (e.g. ./gradlew) is executable.
+ * Source repositories may commit wrapper scripts without the executable bit,
+ * and spawn() with shell:false fails with EACCES in that case.
+ */
+export function ensureExecutable(command: string, cwd: string): void {
+  if (!command.startsWith("./") && !command.startsWith("../")) return
+
+  const path = resolve(cwd, command)
+
+  try {
+    accessSync(path, constants.X_OK)
+    return
+  } catch {
+    // Not executable (or missing) — attempt to fix below
+  }
+
+  try {
+    const stat = statSync(path)
+    if (stat.isFile()) {
+      console.log(`Adding executable permission to ${command}`)
+      chmodSync(path, stat.mode | 0o111)
+    }
+  } catch {
+    // Let spawn() surface the original error (e.g. ENOENT)
+  }
+}
+
 export async function executeBuildCommand(
   payload: BuildPayload,
   cwd: string,
   env: NodeJS.ProcessEnv = process.env
 ): Promise<void> {
   const [command, ...args] = splitBuildCommand(payload.build_command)
+
+  ensureExecutable(command, cwd)
 
   console.log(`Executing build command: ${payload.build_command}`)
 
