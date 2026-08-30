@@ -19,9 +19,7 @@ export function createToolchainConfig(payload: BuildPayload): ToolchainConfig {
 }
 
 export function parseSdkmanCommand(command: string): ["install" | "use", "java" | "maven" | "gradle", string?] {
-  const match = command
-    .trim()
-    .match(/^sdk\s+(install|use)\s+(java|maven|gradle)(?:\s+([a-zA-Z0-9._+-]+))?$/)
+  const match = command.trim().match(/^sdk\s+(install|use)\s+(java|maven|gradle)(?:\s+([a-zA-Z0-9._+-]+))?$/)
 
   if (!match) {
     throw new Error("SDKMAN command must be a single sdk install/use command for java, maven, or gradle")
@@ -58,8 +56,8 @@ export function createSdkmanSetupCommand() {
     "",
     '  candidate_home="$sdkman_dir/candidates/$candidate/$version"',
     '  upper_candidate="$(printf %s "$candidate" | tr "[:lower:]" "[:upper:]")"',
-    "  printf '%s_HOME=%s\\n' \"$upper_candidate\" \"$candidate_home\" >> \"$GITHUB_ENV\"",
-    "  printf '%s/bin\\n' \"$candidate_home\" >> \"$GITHUB_PATH\"",
+    '  printf \'%s_HOME=%s\\n\' "$upper_candidate" "$candidate_home" >> "$GITHUB_ENV"',
+    '  printf \'%s/bin\\n\' "$candidate_home" >> "$GITHUB_PATH"',
     'elif [[ -n "$version" ]]; then',
     '  sdk "$action" "$candidate" "$version"',
     "else",

@@ -91,7 +91,10 @@ export async function hashArtifact(filePath: string): Promise<ArtifactHash> {
 
 export function createManifestVersion(payload: BuildPayload): string {
   const prefix = `${payload.source_mode}-${payload.source_identifier}-${payload.source_commit_sha.slice(0, 7)}`
-  const version = prefix.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32)
+  const version = prefix
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32)
 
   return version || payload.source_commit_sha.slice(0, 7)
 }
@@ -108,7 +111,11 @@ function resolvedIdentifier(payload: BuildPayload) {
   return payload.source_resolved_identifier ?? payload.source_identifier
 }
 
-function resolveManifestVersion(payload: BuildPayload, jarVersion: string | undefined, values: ReturnType<typeof createTemplateValues>) {
+function resolveManifestVersion(
+  payload: BuildPayload,
+  jarVersion: string | undefined,
+  values: ReturnType<typeof createTemplateValues>
+) {
   if (payload.version_template) {
     const version = renderTemplate(payload.version_template, values).trim()
     if (!isValidVersion(version)) throw new Error("Rendered version template is invalid")
@@ -119,7 +126,11 @@ function resolveManifestVersion(payload: BuildPayload, jarVersion: string | unde
   return version && isValidVersion(version) ? version : createManifestVersion(payload)
 }
 
-function resolveManifestName(payload: BuildPayload, jarName: string | undefined, values: ReturnType<typeof createTemplateValues>) {
+function resolveManifestName(
+  payload: BuildPayload,
+  jarName: string | undefined,
+  values: ReturnType<typeof createTemplateValues>
+) {
   if (payload.name_template) {
     const name = renderTemplate(payload.name_template, values).trim()
     if (!isValidName(name)) throw new Error("Rendered name template is invalid")

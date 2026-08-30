@@ -97,7 +97,9 @@ export async function generateManifest(payloadPath: string, sourceDirectory: str
 
 async function readMetadata(outputDirectory: string): Promise<RunnerArtifactMetadata | undefined> {
   try {
-    return JSON.parse(await readFile(path.join(outputDirectory, "artifact-metadata.json"), "utf8")) as RunnerArtifactMetadata
+    return JSON.parse(
+      await readFile(path.join(outputDirectory, "artifact-metadata.json"), "utf8")
+    ) as RunnerArtifactMetadata
   } catch {
     return undefined
   }
@@ -122,7 +124,7 @@ export async function sendPostBuildCallback(payloadPath: string, outputDirectory
       artifactNames: metadata?.artifactNames,
     },
     conclusion,
-    conclusion === "success" ? undefined : process.env.BUILD_ERROR_MESSAGE ?? "Build failed"
+    conclusion === "success" ? undefined : (process.env.BUILD_ERROR_MESSAGE ?? "Build failed")
   )
   const secret = process.env.AUTO_BUILD_CALLBACK_SECRET
 

@@ -25,7 +25,8 @@ const sdkmanCommandSchema = z
   .max(1000)
   .refine(
     (value) =>
-      value.trim() === "" || /^sdk\s+(?:install|use)\s+(?:java|maven|gradle)(?:\s+[a-zA-Z0-9._+-]+)?$/.test(value.trim()),
+      value.trim() === "" ||
+      /^sdk\s+(?:install|use)\s+(?:java|maven|gradle)(?:\s+[a-zA-Z0-9._+-]+)?$/.test(value.trim()),
     { message: "SDKMAN command must be a single sdk install/use command for java, maven, or gradle" }
   )
 

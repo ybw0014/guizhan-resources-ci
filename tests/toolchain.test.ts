@@ -33,9 +33,9 @@ describe("parseSdkmanCommand", () => {
     "rejects %s",
     (command) => {
       expect(() => parseSdkmanCommand(command)).toThrow(
-        "SDKMAN command must be a single sdk install/use command for java, maven, or gradle",
+        "SDKMAN command must be a single sdk install/use command for java, maven, or gradle"
       )
-    },
+    }
   )
 })
 
@@ -86,7 +86,7 @@ describe("createSdkmanSetupCommand", () => {
         GITHUB_PATH: githubPathPath,
         SDKMAN_DIR: sdkmanDirectory,
         SDKMAN_FAIL_ACTION: sdkmanFailAction,
-      }),
+      })
     ).rejects.toThrow()
     expect(await readFile(callsPath, "utf8")).toBe("install java 21.0.6-tem\n")
     expect(await readFile(githubEnvPath, "utf8")).toBe("")
@@ -129,7 +129,7 @@ async function createFakeSdkman(options: { failAction?: "install" | "use" } = {}
   await mkdir(path.dirname(initPath), { recursive: true })
   await writeFile(
     initPath,
-    'sdk() {\n  printf "%s\\n" "$*" >> "$SDKMAN_CALLS"\n  if [[ -n "${SDKMAN_FAIL_ACTION:-}" && "$1" == "${SDKMAN_FAIL_ACTION}" ]]; then\n    return 1\n  fi\n  return 0\n}\n',
+    'sdk() {\n  printf "%s\\n" "$*" >> "$SDKMAN_CALLS"\n  if [[ -n "${SDKMAN_FAIL_ACTION:-}" && "$1" == "${SDKMAN_FAIL_ACTION}" ]]; then\n    return 1\n  fi\n  return 0\n}\n'
   )
   await writeFile(callsPath, "")
   await writeFile(githubEnvPath, "")

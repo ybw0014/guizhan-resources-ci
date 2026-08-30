@@ -109,9 +109,9 @@ describe("buildPayloadSchema", () => {
   })
 
   it("preserves legacy version sanitization", () => {
-    expect(createManifestVersion(buildPayloadSchema.parse({ ...branchPayload, source_identifier: "release/1.0.0" }))).toBe(
-      "branch-release-1-0-0-abcdef1"
-    )
+    expect(
+      createManifestVersion(buildPayloadSchema.parse({ ...branchPayload, source_identifier: "release/1.0.0" }))
+    ).toBe("branch-release-1-0-0-abcdef1")
   })
 
   it("parses a tag payload", () => {

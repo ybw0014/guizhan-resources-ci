@@ -20,9 +20,12 @@ describe("automation templates", () => {
         values
       )
     ).toBe("v1.2.0|branch|abcdef1|ybw0014/example-plugin|default|4|1.0.0|{repo}")
-    expect(renderTemplate("{channel_seq}:{jar_version}:{commit_message}", createTemplateValues(buildPayloadSchema.parse(branchPayload)))).toBe(
-      "::"
-    )
+    expect(
+      renderTemplate(
+        "{channel_seq}:{jar_version}:{commit_message}",
+        createTemplateValues(buildPayloadSchema.parse(branchPayload))
+      )
+    ).toBe("::")
   })
 
   it("rejects complete unknown variables while retaining unclosed tokens literally", () => {

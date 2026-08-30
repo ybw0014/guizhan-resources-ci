@@ -86,9 +86,9 @@ describe("runner payload validation", () => {
     const rawPayload = JSON.stringify(branchPayload)
 
     await expect(validatePayload(rawPayload, payloadPath)).rejects.toThrow("BUILD_PAYLOAD_TIMESTAMP")
-    await expect(validatePayload(rawPayload, payloadPath, signPayload(JSON.stringify({ ...branchPayload, run_id: "tampered" })))).rejects.toThrow(
-      "Invalid build payload signature"
-    )
+    await expect(
+      validatePayload(rawPayload, payloadPath, signPayload(JSON.stringify({ ...branchPayload, run_id: "tampered" })))
+    ).rejects.toThrow("Invalid build payload signature")
     await expect(readFile(payloadPath, "utf8")).rejects.toThrow()
   })
 

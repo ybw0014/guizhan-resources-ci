@@ -183,15 +183,19 @@ describe("manifest generation", () => {
       version: "branch-main-abcdef1",
       name: "Auto Build v1.2.0",
     })
-    await expect(createRunnerManifest(buildPayloadSchema.parse({ ...payload, version_template: "{jar_version}" }), [artifactPath])).rejects.toThrow(
-      "Rendered version template is invalid"
-    )
-    await expect(createRunnerManifest(buildPayloadSchema.parse({ ...payload, name_template: "   " }), [artifactPath])).rejects.toThrow(
-      "Rendered name template is invalid"
-    )
+    await expect(
+      createRunnerManifest(buildPayloadSchema.parse({ ...payload, version_template: "{jar_version}" }), [artifactPath])
+    ).rejects.toThrow("Rendered version template is invalid")
+    await expect(
+      createRunnerManifest(buildPayloadSchema.parse({ ...payload, name_template: "   " }), [artifactPath])
+    ).rejects.toThrow("Rendered name template is invalid")
     await expect(
       createRunnerManifest(
-        buildPayloadSchema.parse({ ...payload, changelog_template: "{commit_message}x", source_commit_message: "x".repeat(10000) }),
+        buildPayloadSchema.parse({
+          ...payload,
+          changelog_template: "{commit_message}x",
+          source_commit_message: "x".repeat(10000),
+        }),
         [artifactPath]
       )
     ).rejects.toThrow("Rendered changelog template is too long")
@@ -200,12 +204,16 @@ describe("manifest generation", () => {
   it("rejects control characters from rendered names and falls back from invalid JAR names", async () => {
     const directory = await createTempDirectory()
     const artifactPath = path.join(directory, "plugin.jar")
-    const payload = buildPayloadSchema.parse({ ...branchPayload, source_resolved_identifier: "main", source_commit_message: "line\nbreak" })
+    const payload = buildPayloadSchema.parse({
+      ...branchPayload,
+      source_resolved_identifier: "main",
+      source_commit_message: "line\nbreak",
+    })
     await writeJar(artifactPath, { "plugin.yml": "name: Jar\nversion: 1.0.0\n" })
 
-    await expect(createRunnerManifest({ ...payload, name_template: "{commit_message}" }, [artifactPath])).rejects.toThrow(
-      "Rendered name template is invalid"
-    )
+    await expect(
+      createRunnerManifest({ ...payload, name_template: "{commit_message}" }, [artifactPath])
+    ).rejects.toThrow("Rendered name template is invalid")
     await writeJar(artifactPath, { "plugin.yml": "name: Bad\u0007Name\nversion: 1.0.0\n" })
     await expect(createRunnerManifest(payload, [artifactPath])).resolves.toMatchObject({ name: "Auto Build main" })
   })
