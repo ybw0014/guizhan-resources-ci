@@ -23,6 +23,8 @@
 		"zod": "4.5.1"
 	},
 	"dependencies": {
-		"jszip": "3.10.1"
+		"jszip": "3.10.1",
+		"smol-toml": "1.8.0",
+		"yaml": "2.9.0"
 	}
 }

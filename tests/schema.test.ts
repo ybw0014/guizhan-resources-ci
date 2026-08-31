@@ -108,6 +108,13 @@ describe("buildPayloadSchema", () => {
     expect(runnerManifestSchema.safeParse({ ...manifestPayload, version: "1.0.0" }).success).toBe(true)
   })
 
+  it("preserves the canonical Minecraft version catalog contract field", () => {
+    expect(
+      buildPayloadSchema.parse({ ...branchPayload, canonical_minecraft_versions: ["1.20", "1.20.4"] })
+        .canonical_minecraft_versions
+    ).toEqual(["1.20", "1.20.4"])
+  })
+
   it("preserves legacy version sanitization", () => {
     expect(
       createManifestVersion(buildPayloadSchema.parse({ ...branchPayload, source_identifier: "release/1.0.0" }))

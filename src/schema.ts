@@ -9,7 +9,20 @@ const fileNameRegex = /^[^\\/:*?"<>|]+$/
 const hexRegex = /^[a-fA-F0-9]+$/
 
 const sourceModeSchema = z.enum(["branch", "tag", "release"])
-const platformSchema = z.enum(["bukkit", "paper", "spigot", "folia"])
+const platformSchema = z.enum([
+  "bukkit",
+  "spigot",
+  "paper",
+  "folia",
+  "purpur",
+  "forge",
+  "fabric",
+  "quilt",
+  "neoforge",
+  "resourcepack",
+  "datapack",
+  "other",
+])
 
 const buildCommandSchema = z
   .string()
@@ -55,6 +68,7 @@ export const buildPayloadSchema = z.object({
   version_template: z.string().max(256).optional(),
   name_template: z.string().max(512).optional(),
   changelog_template: z.string().max(10000).optional(),
+  canonical_minecraft_versions: z.array(z.string()).min(1).optional(),
   callback_url: z.url({ protocol: httpProtocolRegex }).max(2048),
   artifact_retention: z.number().int().min(1).default(7),
 })

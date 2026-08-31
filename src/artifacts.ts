@@ -3,6 +3,7 @@ import { mkdir, readdir, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 import { readPrimaryJarMetadata } from "./jar-metadata.js"
+import { scanMinecraftCompatibility } from "./minecraft-compatibility.js"
 import { generateArtifactName } from "./names.js"
 import { BuildPayload, RunnerManifest, runnerManifestSchema } from "./schema.js"
 import { createTemplateValues, renderTemplate } from "./templates.js"
@@ -161,6 +162,21 @@ export async function createRunnerManifest(
   }
 
   const artifacts = await Promise.all(artifactFiles.map((file) => hashArtifact(file)))
+  const compatibility = payload.canonical_minecraft_versions
+    ? await scanMinecraftCompatibility(artifactFiles, payload.canonical_minecraft_versions)
+    : undefined
+  if (compatibility && !compatibility.hasRecognizedDescriptor) {
+    console.warn("No supported Minecraft compatibility descriptor found in build artifacts")
+  }
+  if (compatibility?.hasRecognizedDescriptor && compatibility.minecraftVersions === undefined) {
+    console.warn("Supported Minecraft compatibility descriptors declared no Minecraft version constraints")
+  }
+  const compatibilityFields = compatibility?.hasRecognizedDescriptor
+    ? {
+        platforms: compatibility.platforms,
+        ...(compatibility.minecraftVersions ? { minecraft_versions: compatibility.minecraftVersions } : {}),
+      }
+    : undefined
   const isMetadataCapable = payload.source_resolved_identifier !== undefined
   if (!isMetadataCapable) {
     return runnerManifestSchema.parse({
@@ -174,7 +190,7 @@ export async function createRunnerManifest(
       version: createManifestVersion(payload),
       name: `Auto Build ${payload.source_identifier}`.slice(0, 64),
       changelog: `Built from ${payload.source_repo}@${payload.source_commit_sha}`,
-      platforms: ["paper"],
+      ...(compatibilityFields ?? { platforms: ["paper"] }),
       dependencies: [],
       artifacts: artifacts.map((artifact) => ({
         name: artifact.name,
@@ -199,7 +215,7 @@ export async function createRunnerManifest(
     version: resolveManifestVersion(payload, jarMetadata.version, templateValues),
     name: resolveManifestName(payload, jarMetadata.name, templateValues),
     changelog: resolveManifestChangelog(payload, templateValues),
-    platforms: ["paper"],
+    ...(compatibilityFields ?? { platforms: ["paper"] }),
     dependencies: [],
     artifacts: artifacts.map((artifact) => ({
       name: artifact.name,

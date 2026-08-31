@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 
 import JSZip from "jszip"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { collectArtifactFiles, createRunnerManifest, hashArtifact, writeManifestAndMetadata } from "../src/artifacts.js"
 import { generateArtifactName } from "../src/names.js"
@@ -154,6 +154,64 @@ describe("manifest generation", () => {
       name: "Auto Build main",
       changelog: `Built from ${payload.source_repo}@${payload.source_commit_sha}`,
     })
+  })
+
+  it("keeps manifests unchanged without a catalog and detects compatibility in both manifest paths", async () => {
+    const directory = await createTempDirectory()
+    const artifactPath = path.join(directory, "plugin.jar")
+    await writeJar(artifactPath, { "fabric.mod.json": '{"depends":{"minecraft":"1.20.4"}}' })
+    const legacy = await createRunnerManifest(buildPayloadSchema.parse(branchPayload), [artifactPath])
+    expect(legacy).toMatchObject({ platforms: ["paper"] })
+    expect(legacy.minecraft_versions).toBeUndefined()
+
+    const enabledLegacy = await createRunnerManifest(
+      buildPayloadSchema.parse({ ...branchPayload, canonical_minecraft_versions: ["1.20", "1.20.4"] }),
+      [artifactPath]
+    )
+    const enabledCapable = await createRunnerManifest(
+      buildPayloadSchema.parse({
+        ...branchPayload,
+        source_resolved_identifier: "main",
+        canonical_minecraft_versions: ["1.20", "1.20.4"],
+      }),
+      [artifactPath]
+    )
+    expect(enabledLegacy).toMatchObject({ platforms: ["fabric"], minecraft_versions: ["1.20.4"] })
+    expect(enabledCapable).toMatchObject({ platforms: ["fabric"], minecraft_versions: ["1.20.4"] })
+  })
+
+  it("warns and retains the fallback platform when enabled artifacts have no supported descriptor", async () => {
+    const directory = await createTempDirectory()
+    const artifactPath = path.join(directory, "library.jar")
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    await writeJar(artifactPath, { "META-INF/MANIFEST.MF": "Manifest-Version: 1.0\n" })
+
+    const manifest = await createRunnerManifest(
+      buildPayloadSchema.parse({ ...branchPayload, canonical_minecraft_versions: ["1.20", "1.20.4"] }),
+      [artifactPath]
+    )
+
+    expect(manifest).toMatchObject({ platforms: ["paper"] })
+    expect(manifest.minecraft_versions).toBeUndefined()
+    expect(warning).toHaveBeenCalledWith("No supported Minecraft compatibility descriptor found in build artifacts")
+  })
+
+  it("warns when enabled descriptors declare no Minecraft version constraints", async () => {
+    const directory = await createTempDirectory()
+    const artifactPath = path.join(directory, "fabric.jar")
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    await writeJar(artifactPath, { "fabric.mod.json": "{}" })
+
+    const manifest = await createRunnerManifest(
+      buildPayloadSchema.parse({ ...branchPayload, canonical_minecraft_versions: ["1.20", "1.20.4"] }),
+      [artifactPath]
+    )
+
+    expect(manifest).toMatchObject({ platforms: ["fabric"] })
+    expect(manifest.minecraft_versions).toBeUndefined()
+    expect(warning).toHaveBeenCalledWith(
+      "Supported Minecraft compatibility descriptors declared no Minecraft version constraints"
+    )
   })
 
   it("falls back to valid JAR metadata, resolved identifiers, and legacy changelog", async () => {
