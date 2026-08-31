@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { accessSync, chmodSync, constants, statSync } from "node:fs"
+import { accessSync, chmodSync, constants, readFileSync, statSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 
 import { BuildPayload } from "./schema.js"
@@ -73,30 +73,34 @@ export function splitBuildCommand(command: string): [string, ...string[]] {
 }
 
 /**
- * Ensure a relative-path build command (e.g. ./gradlew) is executable.
- * Source repositories may commit wrapper scripts without the executable bit,
- * and spawn() with shell:false fails with EACCES in that case.
+ * Prepare a relative-path build command (e.g. ./gradlew) for direct spawn:
+ * - add the executable bit if missing (repos may commit wrappers without it, spawn fails with EACCES)
+ * - normalize CRLF line endings on shebang scripts (CRLF breaks interpreter resolution, spawn fails with ENOENT)
  */
-export function ensureExecutable(command: string, cwd: string): void {
+export function prepareCommandScript(command: string, cwd: string): void {
   if (!command.startsWith("./") && !command.startsWith("../")) return
 
   const path = resolve(cwd, command)
 
+  let stat
   try {
-    accessSync(path, constants.X_OK)
-    return
+    stat = statSync(path)
   } catch {
-    // Not executable (or missing) — attempt to fix below
+    return // Let spawn() surface the original error (e.g. ENOENT)
   }
+  if (!stat.isFile()) return
 
   try {
-    const stat = statSync(path)
-    if (stat.isFile()) {
-      console.log(`Adding executable permission to ${command}`)
-      chmodSync(path, stat.mode | 0o111)
-    }
+    accessSync(path, constants.X_OK)
   } catch {
-    // Let spawn() surface the original error (e.g. ENOENT)
+    console.log(`Adding executable permission to ${command}`)
+    chmodSync(path, stat.mode | 0o111)
+  }
+
+  const content = readFileSync(path)
+  if (content.subarray(0, 2).toString() === "#!" && content.includes("\r\n")) {
+    console.log(`Normalizing CRLF line endings in ${command}`)
+    writeFileSync(path, content.toString("utf8").replace(/\r\n/g, "\n"))
   }
 }
 
@@ -107,7 +111,7 @@ export async function executeBuildCommand(
 ): Promise<void> {
   const [command, ...args] = splitBuildCommand(payload.build_command)
 
-  ensureExecutable(command, cwd)
+  prepareCommandScript(command, cwd)
 
   console.log(`Executing build command: ${payload.build_command}`)
 
