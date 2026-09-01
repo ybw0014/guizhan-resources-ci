@@ -226,7 +226,7 @@ describe("manifest generation", () => {
 
     expect(manifest).toMatchObject({
       version: "1.0.0",
-      name: "Jar Plugin",
+      name: "1.0.0",
       changelog: `Built from ${branchPayload.source_repo}@${branchPayload.source_commit_sha}`,
     })
   })
@@ -239,7 +239,7 @@ describe("manifest generation", () => {
 
     await expect(createRunnerManifest(payload, [artifactPath])).resolves.toMatchObject({
       version: "branch-main-abcdef1",
-      name: "Auto Build v1.2.0",
+      name: "branch-main-abcdef1",
     })
     await expect(
       createRunnerManifest(buildPayloadSchema.parse({ ...payload, version_template: "{jar_version}" }), [artifactPath])
@@ -259,7 +259,7 @@ describe("manifest generation", () => {
     ).rejects.toThrow("Rendered changelog template is too long")
   })
 
-  it("rejects control characters from rendered names and falls back from invalid JAR names", async () => {
+  it("rejects control characters from rendered names", async () => {
     const directory = await createTempDirectory()
     const artifactPath = path.join(directory, "plugin.jar")
     const payload = buildPayloadSchema.parse({
@@ -273,6 +273,6 @@ describe("manifest generation", () => {
       createRunnerManifest({ ...payload, name_template: "{commit_message}" }, [artifactPath])
     ).rejects.toThrow("Rendered name template is invalid")
     await writeJar(artifactPath, { "plugin.yml": "name: Bad\u0007Name\nversion: 1.0.0\n" })
-    await expect(createRunnerManifest(payload, [artifactPath])).resolves.toMatchObject({ name: "Auto Build main" })
+    await expect(createRunnerManifest(payload, [artifactPath])).resolves.toMatchObject({ name: "1.0.0" })
   })
 })

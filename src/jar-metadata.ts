@@ -4,7 +4,6 @@ import path from "node:path"
 import JSZip from "jszip"
 
 export type JarMetadata = {
-  name?: string
   version?: string
 }
 
@@ -18,11 +17,11 @@ export function selectPrimaryJar(artifactPaths: string[]): string | undefined {
 function parseYamlMetadata(content: string): JarMetadata {
   const metadata: JarMetadata = {}
   for (const line of content.split(/\r?\n/)) {
-    const match = /^(name|version):\s*(.*?)\s*$/.exec(line)
+    const match = /^version:\s*(.*?)\s*$/.exec(line)
     if (!match) continue
 
-    const value = match[2]!.replace(/^['"]|['"]$/g, "").trim()
-    if (value) metadata[match[1]! as keyof JarMetadata] = value
+    const value = match[1]!.replace(/^['"]|['"]$/g, "").trim()
+    if (value) metadata.version = value
   }
   return metadata
 }
@@ -31,11 +30,11 @@ function parseManifestMetadata(content: string): JarMetadata {
   const unfolded = content.replace(/\r?\n /g, "")
   const metadata: JarMetadata = {}
   for (const line of unfolded.split(/\r?\n/)) {
-    const match = /^(Implementation-Title|Implementation-Version):\s*(.*?)\s*$/.exec(line)
+    const match = /^Implementation-Version:\s*(.*?)\s*$/.exec(line)
     if (!match) continue
 
-    const value = match[2]!.trim()
-    if (value) metadata[match[1] === "Implementation-Title" ? "name" : "version"] = value
+    const value = match[1]!.trim()
+    if (value) metadata.version = value
   }
   return metadata
 }
@@ -70,7 +69,6 @@ export async function readPrimaryJarMetadata(artifactPaths: string[]): Promise<J
     if (!content) continue
 
     const candidate = parse(content)
-    metadata.name ??= candidate.name
     metadata.version ??= candidate.version
   }
 

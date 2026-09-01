@@ -108,10 +108,6 @@ function isValidName(value: string) {
   return value.length >= 1 && value.length <= 64 && /^[^\p{Cc}\p{Cf}]+$/u.test(value)
 }
 
-function resolvedIdentifier(payload: BuildPayload) {
-  return payload.source_resolved_identifier ?? payload.source_identifier
-}
-
 function resolveManifestVersion(
   payload: BuildPayload,
   jarVersion: string | undefined,
@@ -129,7 +125,7 @@ function resolveManifestVersion(
 
 function resolveManifestName(
   payload: BuildPayload,
-  jarName: string | undefined,
+  resolvedVersion: string,
   values: ReturnType<typeof createTemplateValues>
 ) {
   if (payload.name_template) {
@@ -138,8 +134,7 @@ function resolveManifestName(
     return name
   }
 
-  const name = jarName?.trim()
-  return name && isValidName(name) ? name : `Auto Build ${resolvedIdentifier(payload)}`.slice(0, 64)
+  return resolvedVersion
 }
 
 function resolveManifestChangelog(payload: BuildPayload, values: ReturnType<typeof createTemplateValues>) {
@@ -204,6 +199,7 @@ export async function createRunnerManifest(
 
   const jarMetadata = await readPrimaryJarMetadata(artifactFiles)
   const templateValues = createTemplateValues(payload, jarMetadata.version)
+  const version = resolveManifestVersion(payload, jarMetadata.version, templateValues)
   const manifest = {
     run_id: payload.run_id,
     project_id: payload.project_id,
@@ -212,8 +208,8 @@ export async function createRunnerManifest(
     source_identifier: payload.source_identifier,
     source_commit_sha: payload.source_commit_sha,
     build_profile: payload.build_profile,
-    version: resolveManifestVersion(payload, jarMetadata.version, templateValues),
-    name: resolveManifestName(payload, jarMetadata.name, templateValues),
+    version,
+    name: resolveManifestName(payload, version, templateValues),
     changelog: resolveManifestChangelog(payload, templateValues),
     ...(compatibilityFields ?? { platforms: ["paper"] }),
     dependencies: [],

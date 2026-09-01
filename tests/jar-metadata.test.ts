@@ -31,7 +31,7 @@ describe("primary JAR metadata", () => {
       "META-INF/MANIFEST.MF": "Implementation-Title: Manifest Name\nImplementation-Version: 0.1.0\n",
     })
 
-    await expect(readPrimaryJarMetadata([jar])).resolves.toEqual({ name: "Paper Name", version: "2.0.0" })
+    await expect(readPrimaryJarMetadata([jar])).resolves.toEqual({ version: "2.0.0" })
   })
 
   it("falls through missing values and handles manifest continuation lines", async () => {
@@ -40,7 +40,7 @@ describe("primary JAR metadata", () => {
       "META-INF/MANIFEST.MF": "Implementation-Version: 1.\n 2.3\n",
     })
 
-    await expect(readPrimaryJarMetadata([jar])).resolves.toEqual({ name: "Paper Name", version: "1.2.3" })
+    await expect(readPrimaryJarMetadata([jar])).resolves.toEqual({ version: "1.2.3" })
   })
 
   it("uses case-sensitive entry paths and ignores invalid ZIPs", async () => {
