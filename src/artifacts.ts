@@ -3,7 +3,7 @@ import { mkdir, readdir, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 import { readPrimaryJarMetadata } from "./jar-metadata.js"
-import { scanMinecraftCompatibility } from "./minecraft-compatibility.js"
+import { scanMinecraftCompatibility, scanPlatformDescriptors } from "./minecraft-compatibility.js"
 import { generateArtifactName } from "./names.js"
 import { BuildPayload, RunnerManifest, runnerManifestSchema } from "./schema.js"
 import { createTemplateValues, renderTemplate } from "./templates.js"
@@ -157,19 +157,26 @@ export async function createRunnerManifest(
   }
 
   const artifacts = await Promise.all(artifactFiles.map((file) => hashArtifact(file)))
+  const detectPlatforms = payload.detect_platforms === true
   const compatibility = payload.canonical_minecraft_versions
     ? await scanMinecraftCompatibility(artifactFiles, payload.canonical_minecraft_versions)
     : undefined
+  const platformScan =
+    detectPlatforms && !payload.canonical_minecraft_versions ? await scanPlatformDescriptors(artifactFiles) : undefined
+  const platformDetection = compatibility ?? platformScan
+  if (detectPlatforms && !platformDetection?.hasRecognizedDescriptor) {
+    throw new Error("detect_platforms is enabled but no supported descriptor was found in build artifacts")
+  }
   if (compatibility && !compatibility.hasRecognizedDescriptor) {
     console.warn("No supported Minecraft compatibility descriptor found in build artifacts")
   }
   if (compatibility?.hasRecognizedDescriptor && compatibility.minecraftVersions === undefined) {
     console.warn("Supported Minecraft compatibility descriptors declared no Minecraft version constraints")
   }
-  const compatibilityFields = compatibility?.hasRecognizedDescriptor
+  const compatibilityFields = platformDetection?.hasRecognizedDescriptor
     ? {
-        platforms: compatibility.platforms,
-        ...(compatibility.minecraftVersions ? { minecraft_versions: compatibility.minecraftVersions } : {}),
+        platforms: platformDetection.platforms,
+        ...(compatibility?.minecraftVersions ? { minecraft_versions: compatibility.minecraftVersions } : {}),
       }
     : undefined
   const isMetadataCapable = payload.source_resolved_identifier !== undefined

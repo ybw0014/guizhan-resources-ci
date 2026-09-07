@@ -115,6 +115,11 @@ describe("buildPayloadSchema", () => {
     ).toEqual(["1.20", "1.20.4"])
   })
 
+  it("keeps detect_platforms optional and preserves an enabled value", () => {
+    expect(buildPayloadSchema.parse(branchPayload).detect_platforms).toBeUndefined()
+    expect(buildPayloadSchema.parse({ ...branchPayload, detect_platforms: true }).detect_platforms).toBe(true)
+  })
+
   it("preserves legacy version sanitization", () => {
     expect(
       createManifestVersion(buildPayloadSchema.parse({ ...branchPayload, source_identifier: "release/1.0.0" }))

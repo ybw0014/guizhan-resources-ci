@@ -1,7 +1,6 @@
+import JSZip from "jszip"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
-
-import JSZip from "jszip"
 import { parse as parseToml } from "smol-toml"
 import { parseDocument } from "yaml"
 
@@ -14,7 +13,7 @@ const descriptorPlatforms = [
   ["quilt.mod.json", "quilt"],
 ] as const
 
-type Platform = (typeof descriptorPlatforms)[number][1]
+export type Platform = (typeof descriptorPlatforms)[number][1]
 type Matcher = (version: string) => boolean
 type DescriptorResult = { platform: Platform; matcher?: Matcher }
 
@@ -22,6 +21,11 @@ export type CompatibilityScanResult = {
   hasRecognizedDescriptor: boolean
   platforms: string[]
   minecraftVersions?: string[]
+}
+
+export type PlatformScanResult = {
+  hasRecognizedDescriptor: boolean
+  platforms: Platform[]
 }
 
 function invalid(descriptor: string, message: string): never {
@@ -309,7 +313,7 @@ async function scanJar(jarPath: string): Promise<DescriptorResult[]> {
     else if (filename === "META-INF/mods.toml") matcher = parseTomlDependencies(content, filename, false)
     else if (filename === "META-INF/neoforge.mods.toml") matcher = parseTomlDependencies(content, filename, true)
     else if (filename === "fabric.mod.json") matcher = parseFabricDescriptor(content, filename)
-    else matcher = parseQuiltDescriptor(content, filename)
+    else if (filename === "quilt.mod.json") matcher = parseQuiltDescriptor(content, filename)
     if (filename === "plugin.yml" && hasPaperDescriptor) {
       if (!results[0]?.matcher && matcher) results[0] = { platform: "paper", matcher }
       continue
@@ -319,26 +323,48 @@ async function scanJar(jarPath: string): Promise<DescriptorResult[]> {
   return results
 }
 
+function filterArtifactJars(artifactPaths: string[]) {
+  return artifactPaths.filter(
+    (artifactPath) => /\.jar$/i.test(artifactPath) && !/(?:-sources|-javadoc)\.jar$/i.test(path.basename(artifactPath))
+  )
+}
+
+function getDetectedPlatforms(descriptorResults: Array<{ platform: Platform }>) {
+  const platforms = descriptorPlatforms
+    .map(([, platform]) => platform)
+    .filter((platform, index, all) => all.indexOf(platform) === index)
+  return platforms.filter((platform) => descriptorResults.some((result) => result.platform === platform))
+}
+
+async function scanJarPlatforms(jarPath: string): Promise<Platform[]> {
+  let zip: JSZip
+  try {
+    zip = await JSZip.loadAsync(await readFile(jarPath))
+  } catch {
+    return []
+  }
+  const names = new Set(Object.keys(zip.files))
+  const hasPaperDescriptor = names.has("paper-plugin.yml")
+  return descriptorPlatforms
+    .filter(([filename]) => names.has(filename) && !(filename === "plugin.yml" && hasPaperDescriptor))
+    .map(([, platform]) => platform)
+}
+
+export async function scanPlatformDescriptors(artifactPaths: string[]): Promise<PlatformScanResult> {
+  const descriptorResults = (await Promise.all(filterArtifactJars(artifactPaths).map(scanJarPlatforms))).flat()
+  const platforms = getDetectedPlatforms(descriptorResults.map((platform) => ({ platform })))
+  return {
+    hasRecognizedDescriptor: descriptorResults.length > 0,
+    platforms,
+  }
+}
+
 export async function scanMinecraftCompatibility(
   artifactPaths: string[],
   catalog: string[]
 ): Promise<CompatibilityScanResult> {
-  const descriptorResults = (
-    await Promise.all(
-      artifactPaths
-        .filter(
-          (artifactPath) =>
-            /\.jar$/i.test(artifactPath) && !/(?:-sources|-javadoc)\.jar$/i.test(path.basename(artifactPath))
-        )
-        .map(scanJar)
-    )
-  ).flat()
-  const platforms = descriptorPlatforms
-    .map(([, platform]) => platform)
-    .filter((platform, index, all) => all.indexOf(platform) === index)
-  const detectedPlatforms = platforms.filter((platform) =>
-    descriptorResults.some((result) => result.platform === platform)
-  )
+  const descriptorResults = (await Promise.all(filterArtifactJars(artifactPaths).map(scanJar))).flat()
+  const detectedPlatforms = getDetectedPlatforms(descriptorResults)
   const matchers = descriptorResults.flatMap((result) => (result.matcher ? [result.matcher] : []))
   const minecraftVersions =
     matchers.length === 0 ? undefined : catalog.filter((version) => matchers.some((matcher) => matcher(version)))

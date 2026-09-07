@@ -69,6 +69,7 @@ export const buildPayloadSchema = z.object({
   name_template: z.string().max(512).optional(),
   changelog_template: z.string().max(10000).optional(),
   canonical_minecraft_versions: z.array(z.string()).min(1).optional(),
+  detect_platforms: z.boolean().optional(),
   callback_url: z.url({ protocol: httpProtocolRegex }).max(2048),
   artifact_retention: z.number().int().min(1).default(7),
 })

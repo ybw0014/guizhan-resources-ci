@@ -156,7 +156,7 @@ describe("manifest generation", () => {
     })
   })
 
-  it("keeps manifests unchanged without a catalog and detects compatibility in both manifest paths", async () => {
+  it("keeps manifests unchanged without detect_platforms and detects compatibility in both manifest paths", async () => {
     const directory = await createTempDirectory()
     const artifactPath = path.join(directory, "plugin.jar")
     await writeJar(artifactPath, { "fabric.mod.json": '{"depends":{"minecraft":"1.20.4"}}' })
@@ -165,12 +165,17 @@ describe("manifest generation", () => {
     expect(legacy.minecraft_versions).toBeUndefined()
 
     const enabledLegacy = await createRunnerManifest(
-      buildPayloadSchema.parse({ ...branchPayload, canonical_minecraft_versions: ["1.20", "1.20.4"] }),
+      buildPayloadSchema.parse({
+        ...branchPayload,
+        detect_platforms: true,
+        canonical_minecraft_versions: ["1.20", "1.20.4"],
+      }),
       [artifactPath]
     )
     const enabledCapable = await createRunnerManifest(
       buildPayloadSchema.parse({
         ...branchPayload,
+        detect_platforms: true,
         source_resolved_identifier: "main",
         canonical_minecraft_versions: ["1.20", "1.20.4"],
       }),
@@ -180,19 +185,58 @@ describe("manifest generation", () => {
     expect(enabledCapable).toMatchObject({ platforms: ["fabric"], minecraft_versions: ["1.20.4"] })
   })
 
-  it("warns and retains the fallback platform when enabled artifacts have no supported descriptor", async () => {
+  it("detects platforms without a catalog and omits Minecraft versions when detect_platforms is enabled", async () => {
+    const directory = await createTempDirectory()
+    const artifactPath = path.join(directory, "plugin.jar")
+    await writeJar(artifactPath, { "fabric.mod.json": '{"depends":{"minecraft":">=1.20"}}' })
+
+    const manifest = await createRunnerManifest(
+      buildPayloadSchema.parse({ ...branchPayload, detect_platforms: true }),
+      [artifactPath]
+    )
+
+    expect(manifest).toMatchObject({ platforms: ["fabric"] })
+    expect(manifest.minecraft_versions).toBeUndefined()
+  })
+
+  it("fails detect_platforms when artifacts have no supported descriptor with or without a catalog", async () => {
+    const directory = await createTempDirectory()
+    const artifactPath = path.join(directory, "library.jar")
+    await writeJar(artifactPath, { "META-INF/MANIFEST.MF": "Manifest-Version: 1.0\n" })
+
+    for (const payload of [
+      buildPayloadSchema.parse({ ...branchPayload, detect_platforms: true }),
+      buildPayloadSchema.parse({
+        ...branchPayload,
+        source_resolved_identifier: "main",
+        detect_platforms: true,
+        canonical_minecraft_versions: ["1.20", "1.20.4"],
+      }),
+    ]) {
+      await expect(createRunnerManifest(payload, [artifactPath])).rejects.toThrow(
+        "detect_platforms is enabled but no supported descriptor was found in build artifacts"
+      )
+    }
+  })
+
+  it("warns and retains the fallback platform when detect_platforms is disabled or absent", async () => {
     const directory = await createTempDirectory()
     const artifactPath = path.join(directory, "library.jar")
     const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined)
     await writeJar(artifactPath, { "META-INF/MANIFEST.MF": "Manifest-Version: 1.0\n" })
 
-    const manifest = await createRunnerManifest(
+    for (const payload of [
       buildPayloadSchema.parse({ ...branchPayload, canonical_minecraft_versions: ["1.20", "1.20.4"] }),
-      [artifactPath]
-    )
-
-    expect(manifest).toMatchObject({ platforms: ["paper"] })
-    expect(manifest.minecraft_versions).toBeUndefined()
+      buildPayloadSchema.parse({
+        ...branchPayload,
+        detect_platforms: false,
+        canonical_minecraft_versions: ["1.20", "1.20.4"],
+      }),
+    ]) {
+      const manifest = await createRunnerManifest(payload, [artifactPath])
+      expect(manifest).toMatchObject({ platforms: ["paper"] })
+      expect(manifest.minecraft_versions).toBeUndefined()
+    }
     expect(warning).toHaveBeenCalledWith("No supported Minecraft compatibility descriptor found in build artifacts")
   })
 

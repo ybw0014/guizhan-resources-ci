@@ -5,7 +5,7 @@ import path from "node:path"
 import JSZip from "jszip"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { scanMinecraftCompatibility } from "../src/minecraft-compatibility.js"
+import { scanMinecraftCompatibility, scanPlatformDescriptors } from "../src/minecraft-compatibility.js"
 import { runnerManifestSchema } from "../src/schema.js"
 
 const catalog = ["1.20", "1.20.1", "1.20.4", "1.20.5", "1.20.6", "1.21", "1.21.1", "26.1"]
@@ -26,6 +26,17 @@ afterEach(async () => {
 })
 
 describe("Minecraft compatibility scanning", () => {
+  it("detects platforms without parsing Minecraft constraints", async () => {
+    const fabric = await createJar("fabric.jar", {
+      "fabric.mod.json": '{"depends":{"minecraft":">=1.20"}}',
+    })
+
+    await expect(scanPlatformDescriptors([fabric])).resolves.toEqual({
+      hasRecognizedDescriptor: true,
+      platforms: ["fabric"],
+    })
+  })
+
   it("expands plugin API versions, honors YAML strings, and falls back from paper to plugin", async () => {
     await expect(
       scanMinecraftCompatibility([await createJar("two.jar", { "plugin.yml": "api-version: 1.20\n" })], catalog)
