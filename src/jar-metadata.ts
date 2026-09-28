@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 
 import JSZip from "jszip"
+import { JAR_MANIFEST_PATH } from "./config.js"
+import { inspectJar, parseManifestMetadata } from "./jar-version.js"
 
 export type JarMetadata = {
   version?: string
@@ -26,19 +28,6 @@ function parseYamlMetadata(content: string): JarMetadata {
   return metadata
 }
 
-function parseManifestMetadata(content: string): JarMetadata {
-  const unfolded = content.replace(/\r?\n /g, "")
-  const metadata: JarMetadata = {}
-  for (const line of unfolded.split(/\r?\n/)) {
-    const match = /^Implementation-Version:\s*(.*?)\s*$/.exec(line)
-    if (!match) continue
-
-    const value = match[1]!.trim()
-    if (value) metadata.version = value
-  }
-  return metadata
-}
-
 async function readZipEntry(zip: JSZip, filename: string): Promise<string | undefined> {
   try {
     const entry = zip.file(filename)
@@ -48,9 +37,14 @@ async function readZipEntry(zip: JSZip, filename: string): Promise<string | unde
   }
 }
 
-export async function readPrimaryJarMetadata(artifactPaths: string[]): Promise<JarMetadata> {
+export async function readPrimaryJarMetadata(artifactPaths: string[], rewriteVersion = false): Promise<JarMetadata> {
   const primaryJar = selectPrimaryJar(artifactPaths)
   if (!primaryJar) return {}
+
+  if (rewriteVersion) {
+    const inspection = await inspectJar(primaryJar)
+    return inspection.originalVersion ? { version: inspection.originalVersion } : {}
+  }
 
   let zip: JSZip
   try {
@@ -63,7 +57,7 @@ export async function readPrimaryJarMetadata(artifactPaths: string[]): Promise<J
   for (const [filename, parse] of [
     ["paper-plugin.yml", parseYamlMetadata],
     ["plugin.yml", parseYamlMetadata],
-    ["META-INF/MANIFEST.MF", parseManifestMetadata],
+    [JAR_MANIFEST_PATH, parseManifestMetadata],
   ] as const) {
     const content = await readZipEntry(zip, filename)
     if (!content) continue

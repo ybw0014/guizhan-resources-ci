@@ -89,6 +89,9 @@ describe("buildPayloadSchema", () => {
       pnpm_version: "11.1.2",
       callback_url: "https://resources.guizhan.example/v1/projects/project001/automation/runs/runbranch001/callback",
       artifact_retention: 7,
+      build_directory: ".",
+      rewrite_version: false,
+      artifact_name_template: "",
     })
   })
 
@@ -106,6 +109,43 @@ describe("buildPayloadSchema", () => {
       })
     ).toMatchObject({ source_resolved_identifier: "v1.2.0", channel_version_count: 0 })
     expect(runnerManifestSchema.safeParse({ ...manifestPayload, version: "1.0.0" }).success).toBe(true)
+  })
+
+  it("accepts future rewrite fields without changing the old payload defaults", () => {
+    expect(
+      buildPayloadSchema.parse({
+        ...branchPayload,
+        build_directory: "projects/plugin",
+        rewrite_version: true,
+        artifact_name_template: "Plugin-{version}",
+      })
+    ).toMatchObject({
+      build_directory: "projects/plugin",
+      rewrite_version: true,
+      artifact_name_template: "Plugin-{version}",
+    })
+  })
+
+  it("validates the filename template independently of the final appended extension", () => {
+    for (const template of ["", "{version}", "{channel_seq}", "{commit_sha}", "{basename}-{version}"]) {
+      expect(buildPayloadSchema.safeParse({ ...branchPayload, artifact_name_template: template }).success).toBe(true)
+    }
+    for (const template of [
+      "{version}{ext}",
+      "{ext}-{version}",
+      "{basename}",
+      "{jar_version}",
+      "{unknown}-{version}",
+      "{version}+",
+      "{version}-{}",
+      "{version}-{basename",
+      "{version}-{{basename}}",
+      "a".repeat(248) + "{version}",
+    ]) {
+      expect(buildPayloadSchema.safeParse({ ...branchPayload, artifact_name_template: template }).success).toBe(false)
+    }
+    const rejected = buildPayloadSchema.safeParse({ ...branchPayload, artifact_name_template: "{version}{ext}" })
+    expect(rejected.error?.issues[0]?.message).toBe("Unknown template variable: {ext}")
   })
 
   it("preserves the canonical Minecraft version catalog contract field", () => {

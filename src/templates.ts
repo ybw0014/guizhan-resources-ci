@@ -1,3 +1,4 @@
+import { ARTIFACT_FILENAME_VARIABLES, ARTIFACT_RUN_VARIABLES, ARTIFACT_TEMPLATE_TOKEN_REGEX } from "./config.js"
 import { BuildPayload } from "./schema.js"
 
 const templateVariables = [
@@ -12,6 +13,7 @@ const templateVariables = [
 ] as const
 
 export type TemplateValues = Record<(typeof templateVariables)[number], string>
+export type FilenameTemplateValues = Record<(typeof ARTIFACT_FILENAME_VARIABLES)[number], string>
 
 export function createTemplateValues(payload: BuildPayload, jarVersion?: string): TemplateValues {
   return {
@@ -26,11 +28,32 @@ export function createTemplateValues(payload: BuildPayload, jarVersion?: string)
   }
 }
 
-export function renderTemplate(template: string, values: TemplateValues): string {
+export function renderTemplate(template: string, values: TemplateValues | FilenameTemplateValues): string {
+  const allowed = "basename" in values ? ARTIFACT_FILENAME_VARIABLES : templateVariables
   return template.replace(/\{([^{}]+)\}/g, (token, name: string) => {
-    if (!(templateVariables as readonly string[]).includes(name)) {
-      throw new Error(`Unknown template variable: ${token}`)
-    }
+    assertKnownVariable(name, allowed, token)
     return values[name as keyof TemplateValues]
   })
+}
+
+function assertKnownVariable(name: string, allowed: readonly string[], token: string) {
+  if (!allowed.includes(name)) throw new Error(`Unknown template variable: ${token}`)
+}
+
+export function validateFilenameTemplate(template: string) {
+  const variables: string[] = []
+  let end = 0
+  while (end < template.length) {
+    ARTIFACT_TEMPLATE_TOKEN_REGEX.lastIndex = end
+    const match = ARTIFACT_TEMPLATE_TOKEN_REGEX.exec(template)
+    if (!match) throw new Error(`Invalid artifact filename template at position ${end}`)
+    if (match[1]) {
+      assertKnownVariable(match[1], ARTIFACT_FILENAME_VARIABLES, `{${match[1]}}`)
+      variables.push(match[1])
+    }
+    end = ARTIFACT_TEMPLATE_TOKEN_REGEX.lastIndex
+  }
+  if (!variables.some((variable) => (ARTIFACT_RUN_VARIABLES as readonly string[]).includes(variable))) {
+    throw new Error("Artifact filename template requires a run identifier")
+  }
 }

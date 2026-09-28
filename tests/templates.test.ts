@@ -35,5 +35,25 @@ describe("automation templates", () => {
     expect(() => renderTemplate("{foo-bar}", values)).toThrow("Unknown template variable: {foo-bar}")
     expect(() => renderTemplate("{123}", values)).toThrow("Unknown template variable: {123}")
     expect(renderTemplate("before {identifier after", values)).toBe("before {identifier after")
+    for (const token of ["{version}", "{basename}", "{ext}"]) {
+      expect(() => renderTemplate(token, values)).toThrow("Unknown template variable")
+    }
+  })
+
+  it("uses the same single-pass renderer for filename-only variables", () => {
+    const values = createTemplateValues(
+      buildPayloadSchema.parse({ ...branchPayload, channel_version_count: 7 }),
+      "{channel_seq}"
+    )
+    expect(
+      renderTemplate("{jar_version}-{channel_seq}-{version}-{basename}", {
+        ...values,
+        version: "slug",
+        basename: "Original-sources",
+      })
+    ).toBe("{channel_seq}-8-slug-Original-sources")
+    expect(() =>
+      renderTemplate("{version}{ext}", { ...values, version: "slug", basename: "Original-sources" })
+    ).toThrow("Unknown template variable: {ext}")
   })
 })

@@ -3,12 +3,19 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-import { afterEach, describe, expect, it } from "vitest"
+import JSZip from "jszip"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { sanitizeBuildEnv } from "../src/command.js"
 import { generateArtifactName, generateRunName } from "../src/names.js"
 import { BuildPayload, buildPayloadSchema, runnerManifestSchema } from "../src/schema.js"
-import { generateManifest, runBuild, validatePayload } from "../src/runner.js"
+import {
+  generateManifest,
+  runBuild,
+  sendPostBuildCallback,
+  stageBuildArtifacts,
+  validatePayload,
+} from "../src/runner.js"
 import branchPayload from "./fixtures/branch-payload.json" with { type: "json" }
 import invalidCommandPayload from "./fixtures/invalid-command-payload.json" with { type: "json" }
 
@@ -17,6 +24,8 @@ const originalGithubOutput = process.env.GITHUB_OUTPUT
 const originalCallbackSecret = process.env.AUTO_BUILD_CALLBACK_SECRET
 const originalGithubToken = process.env.GITHUB_TOKEN
 const originalActionsRuntimeToken = process.env.ACTIONS_RUNTIME_TOKEN
+const originalJobStatus = process.env.JOB_STATUS
+const originalBuildErrorMessage = process.env.BUILD_ERROR_MESSAGE
 const payloadSecret = "test-build-payload-secret"
 
 async function createTempDirectory() {
@@ -47,6 +56,9 @@ afterEach(async () => {
   process.env.AUTO_BUILD_CALLBACK_SECRET = originalCallbackSecret
   process.env.GITHUB_TOKEN = originalGithubToken
   process.env.ACTIONS_RUNTIME_TOKEN = originalActionsRuntimeToken
+  process.env.JOB_STATUS = originalJobStatus
+  process.env.BUILD_ERROR_MESSAGE = originalBuildErrorMessage
+  vi.unstubAllGlobals()
 
   await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })))
 })
@@ -66,6 +78,9 @@ describe("runner payload validation", () => {
     expect(await readFile(payloadPath, "utf8")).toContain(branchPayload.idempotency_key)
     expect(output).toContain(`source_repo=${branchPayload.source_repo}`)
     expect(output).toContain(`source_commit_sha=${branchPayload.source_commit_sha}`)
+    expect(output).toContain(
+      `raw_artifact_name=${generateArtifactName(branchPayload.idempotency_key, "build-artifacts-raw")}`
+    )
   })
 
   it("rejects an invalid command before checkout outputs are created", async () => {
@@ -110,6 +125,97 @@ describe("runner payload validation", () => {
 })
 
 describe("runner build and manifest orchestration", () => {
+  it("sends a failure callback after a successful build but failed finalize without exposing raw artifacts", async () => {
+    const directory = await createTempDirectory()
+    const sourceDirectory = path.join(directory, "source")
+    const rawDirectory = path.join(directory, "raw")
+    const finalDirectory = path.join(directory, "final")
+    const outputDirectory = path.join(directory, "output")
+    const payload = buildPayloadSchema.parse({
+      ...branchPayload,
+      source_resolved_identifier: "main",
+      build_command: "node build.mjs",
+      rewrite_version: true,
+      artifact_name_template: "{channel_seq}",
+    })
+    const payloadPath = await writePayload(directory, payload)
+    const jar = new JSZip()
+    jar.file("plugin.yml", "name: Plugin\nversion: 1.0\n")
+    const jarBytes = await jar.generateAsync({ type: "nodebuffer" })
+    await mkdir(sourceDirectory)
+    await writeFile(
+      path.join(sourceDirectory, "build.mjs"),
+      `import { mkdirSync, writeFileSync } from "node:fs"\nmkdirSync("target")\nwriteFileSync("target/plugin.jar", Buffer.from("${jarBytes.toString("base64")}", "base64"))\n`
+    )
+
+    await runBuild(payloadPath, sourceDirectory)
+    await stageBuildArtifacts(payloadPath, sourceDirectory, rawDirectory)
+    expect(await readFile(path.join(rawDirectory, "target", "plugin.jar"))).toEqual(jarBytes)
+    await expect(generateManifest(payloadPath, rawDirectory, finalDirectory, outputDirectory)).rejects.toThrow(
+      "channel_version_count"
+    )
+    await expect(readFile(path.join(outputDirectory, "manifest.json"))).rejects.toThrow()
+    await expect(readFile(path.join(outputDirectory, "artifact-metadata.json"))).rejects.toThrow()
+    await expect(readFile(path.join(finalDirectory, "target", "plugin.jar"))).rejects.toThrow()
+
+    process.env.JOB_STATUS = "failure"
+    process.env.BUILD_ERROR_MESSAGE = "Artifact version rewrite failed"
+    process.env.AUTO_BUILD_CALLBACK_SECRET = "callback-secret"
+    const fetchMock = vi.fn(
+      async (_input: string | URL | Request, _init?: RequestInit) => new Response(null, { status: 204 })
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    await sendPostBuildCallback(payloadPath, outputDirectory)
+
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(fetchMock.mock.calls[0]![0]).toBe(payload.callback_url)
+    const callback = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body))
+    expect(callback).toMatchObject({
+      conclusion: "failure",
+      error_message: "Artifact version rewrite failed",
+      manifest_artifact_name: generateArtifactName(payload.idempotency_key, "manifest"),
+      artifact_names: [],
+    })
+    expect(callback.artifact_names).not.toContain(generateArtifactName(payload.idempotency_key, "build-artifacts-raw"))
+  })
+
+  it("reports a rewritten artifact path and produces no GitHub success outputs on rewrite failure", async () => {
+    const directory = await createTempDirectory()
+    const rawDirectory = path.join(directory, "raw")
+    const payload = buildPayloadSchema.parse({
+      ...branchPayload,
+      source_resolved_identifier: "main",
+      rewrite_version: true,
+      name_template: "Display Name",
+    })
+    const payloadPath = await writePayload(directory, payload)
+    const jar = new JSZip()
+    jar.file("plugin.yml", "version: 1.0")
+    await mkdir(path.join(rawDirectory, "target"), { recursive: true })
+    await writeFile(path.join(rawDirectory, "target", "plugin.jar"), await jar.generateAsync({ type: "nodebuffer" }))
+    const outputPath = path.join(directory, "github-output.txt")
+    process.env.GITHUB_OUTPUT = outputPath
+
+    const result = await generateManifest(
+      payloadPath,
+      rawDirectory,
+      path.join(directory, "final"),
+      path.join(directory, "output")
+    )
+    expect(result.artifactPaths.map((file) => path.basename(file))).toEqual(["plugin-1.jar"])
+    expect(await readFile(outputPath, "utf8")).toContain(`artifact_paths=${result.artifactPaths[0]}`)
+
+    await expect(
+      generateManifest(
+        await writePayload(directory, { ...payload, artifact_name_template: "{channel_seq}" }),
+        rawDirectory,
+        path.join(directory, "failed-final"),
+        path.join(directory, "failed-output")
+      )
+    ).rejects.toThrow("channel_version_count")
+    await expect(readFile(path.join(directory, "failed-output", "manifest.json"))).rejects.toThrow()
+  })
   it("does not expose callback or GitHub tokens to the build command", async () => {
     const directory = await createTempDirectory()
     const sourceDirectory = path.join(directory, "source")
@@ -142,6 +248,8 @@ describe("runner build and manifest orchestration", () => {
     const directory = await createTempDirectory()
     const sourceDirectory = path.join(directory, "source")
     const outputDirectory = path.join(directory, "runner-output")
+    const rawDirectory = path.join(directory, "artifact-source")
+    const finalDirectory = path.join(directory, "artifact-final")
     const artifactDirectory = path.join(sourceDirectory, "target")
     const payload = buildPayloadSchema.parse(branchPayload)
     const payloadPath = await writePayload(directory, payload)
@@ -151,7 +259,8 @@ describe("runner build and manifest orchestration", () => {
     await mkdir(artifactDirectory, { recursive: true })
     await writeFile(path.join(artifactDirectory, "plugin.jar"), "fake jar bytes")
 
-    const metadata = await generateManifest(payloadPath, sourceDirectory, outputDirectory)
+    await stageBuildArtifacts(payloadPath, sourceDirectory, rawDirectory)
+    const metadata = await generateManifest(payloadPath, rawDirectory, finalDirectory, outputDirectory)
     const manifest = runnerManifestSchema.parse(
       JSON.parse(await readFile(path.join(outputDirectory, "manifest.json"), "utf8"))
     )
@@ -160,6 +269,7 @@ describe("runner build and manifest orchestration", () => {
     expect(metadata.manifestArtifactName).toBe(generateArtifactName(payload.idempotency_key, "manifest"))
     expect(metadata.buildArtifactName).toBe(generateArtifactName(payload.idempotency_key, "build-artifacts"))
     expect(metadata.artifactPaths).toHaveLength(1)
+    expect(metadata.artifactPaths).toEqual([path.join(finalDirectory, "target", "plugin.jar")])
     expect(manifest.minecraft_versions).toBeUndefined()
     expect(manifest).toMatchObject({
       run_id: payload.run_id,

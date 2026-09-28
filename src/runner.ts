@@ -1,10 +1,12 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 
-import { writeManifestAndMetadata, RunnerArtifactMetadata } from "./artifacts.js"
+import { finalizeArtifacts, stageArtifacts, RunnerArtifactMetadata } from "./artifacts.js"
+import { resolveBuildDirectory } from "./build-directory.js"
 import { createCallbackPayload, sendCallback } from "./callback.js"
 import { createCheckoutConfig, parseBuildPayload } from "./checkout.js"
 import { executeBuildCommand } from "./command.js"
+import { FINAL_ARTIFACT_SUFFIX, RAW_ARTIFACT_SUFFIX } from "./config.js"
 import { generateArtifactName, generateRunName } from "./names.js"
 import { BuildPayloadSignatureInput, verifyBuildPayloadSignature } from "./payload-signature.js"
 import { BuildPayload } from "./schema.js"
@@ -65,7 +67,8 @@ export async function validatePayload(
     sdkman_custom: toolchain.sdkmanCustom ?? "",
     artifact_retention: getArtifactRetentionDays(payload),
     manifest_artifact_name: generateArtifactName(payload.idempotency_key, "manifest"),
-    build_artifact_name: generateArtifactName(payload.idempotency_key, "build-artifacts"),
+    build_artifact_name: generateArtifactName(payload.idempotency_key, FINAL_ARTIFACT_SUFFIX),
+    raw_artifact_name: generateArtifactName(payload.idempotency_key, RAW_ARTIFACT_SUFFIX),
   })
 
   return payload
@@ -78,12 +81,22 @@ export async function loadPayload(payloadPath: string): Promise<BuildPayload> {
 export async function runBuild(payloadPath: string, sourceDirectory: string): Promise<void> {
   const payload = await loadPayload(payloadPath)
 
-  await executeBuildCommand(payload, sourceDirectory)
+  await executeBuildCommand(payload, await resolveBuildDirectory(sourceDirectory, payload.build_directory))
 }
 
-export async function generateManifest(payloadPath: string, sourceDirectory: string, outputDirectory: string) {
+export async function stageBuildArtifacts(payloadPath: string, sourceDirectory: string, stagingDirectory: string) {
   const payload = await loadPayload(payloadPath)
-  const metadata = await writeManifestAndMetadata(payload, sourceDirectory, outputDirectory)
+  return stageArtifacts(await resolveBuildDirectory(sourceDirectory, payload.build_directory), stagingDirectory)
+}
+
+export async function generateManifest(
+  payloadPath: string,
+  rawDirectory: string,
+  finalDirectory: string,
+  outputDirectory: string
+) {
+  const payload = await loadPayload(payloadPath)
+  const metadata = await finalizeArtifacts(payload, rawDirectory, finalDirectory, outputDirectory)
 
   await appendGithubOutput({
     manifest_artifact_name: metadata.manifestArtifactName,
@@ -148,10 +161,18 @@ async function main() {
     return
   }
 
-  if (command === "manifest") {
-    const outputDirectory = args[2] ?? ".runner-output"
-    await mkdir(outputDirectory, { recursive: true })
-    await generateManifest(args[0] ?? "payload.json", args[1] ?? "source", outputDirectory)
+  if (command === "stage") {
+    await stageBuildArtifacts(args[0] ?? "payload.json", args[1] ?? "source", args[2] ?? "artifact-source")
+    return
+  }
+
+  if (command === "finalize") {
+    await generateManifest(
+      args[0] ?? "payload.json",
+      args[1] ?? "artifact-source",
+      args[2] ?? "artifact-final",
+      args[3] ?? ".runner-output"
+    )
     return
   }
 

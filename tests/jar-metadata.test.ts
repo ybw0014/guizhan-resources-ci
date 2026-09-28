@@ -55,4 +55,13 @@ describe("primary JAR metadata", () => {
   it("sorts before selecting the first non-sources/non-javadoc JAR", () => {
     expect(selectPrimaryJar(["d.JAR", "c.jar", "a-javadoc.jar", "b-sources.jar"])).toBe("c.jar")
   })
+
+  it("adds mod descriptors to the version priority only while rewriting", async () => {
+    const jar = await createJar({
+      "fabric.mod.json": '{"version":"2.0"}',
+      "META-INF/MANIFEST.MF": "Implementation-Version: 1.0\n",
+    })
+    expect(await readPrimaryJarMetadata([jar])).toEqual({ version: "1.0" })
+    expect(await readPrimaryJarMetadata([jar], true)).toEqual({ version: "2.0" })
+  })
 })

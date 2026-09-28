@@ -1,14 +1,17 @@
 import { createHash, createHmac } from "node:crypto"
+import { execFile } from "node:child_process"
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { promisify } from "node:util"
 
 import { afterEach, describe, expect, it } from "vitest"
+import JSZip from "jszip"
 
 import { createCallbackPayload } from "../src/callback.js"
 import { buildPayloadSchema, callbackPayloadSchema, runnerManifestSchema, BuildPayload } from "../src/schema.js"
-import { generateManifest, runBuild, validatePayload } from "../src/runner.js"
+import { generateManifest, runBuild, stageBuildArtifacts, validatePayload } from "../src/runner.js"
 import branchPayload from "./fixtures/branch-payload.json" with { type: "json" }
 
 const ciRepoRoot = fileURLToPath(new URL("..", import.meta.url))
@@ -17,6 +20,7 @@ const fixtureProject = path.join(ciRepoRoot, "tests", "fixtures", "java-maven-pr
 const evidenceDirectory = process.env.SISYPHUS_EVIDENCE_DIR ?? path.join(parentRepoRoot, ".omo", "evidence")
 const tempDirectories: string[] = []
 const payloadSecret = "test-build-payload-secret"
+const execFileAsync = promisify(execFile)
 
 function signPayload(rawPayload: string, timestamp = "1700000000") {
   return {
@@ -51,10 +55,90 @@ afterEach(async () => {
 })
 
 describe("cross-repo runner contract", () => {
+  it("compiles Java and builds a JAR with jar tooling before rewriting and validating it", async () => {
+    const directory = await createTempDirectory()
+    const source = path.join(directory, "source")
+    await cp(fixtureProject, source, { recursive: true })
+    await mkdir(path.join(source, "classes"), { recursive: true })
+    await mkdir(path.join(source, "target"), { recursive: true })
+    await execFileAsync("javac", [
+      "-d",
+      path.join(source, "classes"),
+      path.join(source, "src", "main", "java", "io", "github", "guizhan", "resources", "fixture", "ExamplePlugin.java"),
+    ])
+    await writeFile(path.join(source, "classes", "plugin.yml"), "name: CompiledPlugin\nversion: 1.0\n")
+    const payload = buildPayloadSchema.parse({
+      ...branchPayload,
+      source_resolved_identifier: "main",
+      rewrite_version: true,
+      name_template: "Compiled Beta",
+      build_command: "jar --create --file target/compiled.jar -C classes .",
+    })
+    const payloadPath = await writePayload(directory, payload)
+    await runBuild(payloadPath, source)
+    const raw = path.join(directory, "raw")
+    await stageBuildArtifacts(payloadPath, source, raw)
+    const metadata = await generateManifest(
+      payloadPath,
+      raw,
+      path.join(directory, "final"),
+      path.join(directory, "output")
+    )
+    const finalJar = metadata.artifactPaths[0]!
+    expect(path.basename(finalJar)).toBe("compiled-1.jar")
+    await execFileAsync("jar", ["--validate", "--file", finalJar])
+    const { stdout } = await execFileAsync("jar", ["tf", finalJar])
+    expect(stdout).toContain("ExamplePlugin.class")
+    expect(stdout).toContain("plugin.yml")
+    const zip = await JSZip.loadAsync(await readFile(finalJar))
+    expect(await zip.file("plugin.yml")!.async("string")).toContain("Compiled Beta")
+  })
+
+  it("builds in a subdirectory, stages, rewrites, and publishes the Maven fixture under its final name", async () => {
+    const directory = await createTempDirectory()
+    const source = path.join(directory, "source")
+    const project = path.join(source, "modules", "plugin")
+    const raw = path.join(directory, "raw")
+    const final = path.join(directory, "final")
+    const output = path.join(directory, "output")
+    const payload = buildPayloadSchema.parse({
+      ...branchPayload,
+      build_directory: "modules/plugin",
+      build_command: "node scripts/create-fixture-artifact.mjs",
+      source_resolved_identifier: "main",
+      rewrite_version: true,
+      version_template: "build-{commit_sha}",
+      name_template: "Display Beta",
+      artifact_name_template: "Fixture-{version}",
+    })
+    const payloadPath = await writePayload(directory, payload)
+    await cp(fixtureProject, project, { recursive: true })
+    await runBuild(payloadPath, source)
+    await stageBuildArtifacts(payloadPath, source, raw)
+    const metadata = await generateManifest(payloadPath, raw, final, output)
+    const manifest = runnerManifestSchema.parse(JSON.parse(await readFile(metadata.manifestPath, "utf8")))
+    expect(manifest).toMatchObject({ version: "build-abcdef1", name: "Display Beta" })
+    expect(manifest.artifacts[0]?.name).toBe("Fixture-build-abcdef1.jar")
+    const bytes = await readFile(metadata.artifactPaths[0]!)
+    expect(manifest.artifacts[0]).toMatchObject({
+      sha1: createHash("sha1").update(bytes).digest("hex"),
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+      size: bytes.length,
+    })
+    const jar = await JSZip.loadAsync(bytes)
+    expect(await jar.file("plugin.yml")!.async("string")).toContain("Display Beta")
+    await expect(execFileAsync("jar", ["--validate", "--file", metadata.artifactPaths[0]!])).resolves.toBeDefined()
+    expect(await readFile(path.join(raw, "target", "java-maven-fixture.jar"))).toEqual(
+      await readFile(path.join(project, "target", "java-maven-fixture.jar"))
+    )
+    expect(metadata.artifactNames).toEqual([metadata.buildArtifactName])
+  })
   it("builds the Java/Maven fixture and emits API-compatible manifest and callback payloads", async () => {
     const directory = await createTempDirectory()
     const sourceDirectory = path.join(directory, "source")
     const outputDirectory = path.join(directory, "runner-output")
+    const rawDirectory = path.join(directory, "artifact-source")
+    const finalDirectory = path.join(directory, "artifact-final")
     const payload = buildPayloadSchema.parse({
       ...branchPayload,
       build_command: "node scripts/create-fixture-artifact.mjs",
@@ -65,7 +149,8 @@ describe("cross-repo runner contract", () => {
     const rawPayload = JSON.stringify(payload)
     await validatePayload(rawPayload, payloadPath, signPayload(rawPayload))
     await runBuild(payloadPath, sourceDirectory)
-    const metadata = await generateManifest(payloadPath, sourceDirectory, outputDirectory)
+    await stageBuildArtifacts(payloadPath, sourceDirectory, rawDirectory)
+    const metadata = await generateManifest(payloadPath, rawDirectory, finalDirectory, outputDirectory)
     const manifest = runnerManifestSchema.parse(
       JSON.parse(await readFile(path.join(outputDirectory, "manifest.json"), "utf8"))
     )
@@ -86,10 +171,13 @@ describe("cross-repo runner contract", () => {
       }
     )
 
-    expect(metadata.artifactPaths).toEqual([artifactPath])
+    expect(metadata.artifactPaths).toEqual([path.join(finalDirectory, "target", "java-maven-fixture.jar")])
+    expect(await readFile(path.join(rawDirectory, "target", "java-maven-fixture.jar"))).toEqual(artifactBytes)
+    expect(await readFile(metadata.artifactPaths[0]!)).toEqual(artifactBytes)
     expect(metadata.artifactNames).toEqual([metadata.buildArtifactName])
     expect(metadata.manifestArtifactName).toContain(payload.idempotency_key)
     expect(metadata.buildArtifactName).toContain(payload.idempotency_key)
+    expect(metadata.artifactNames).not.toContain(`${payload.idempotency_key}-build-artifacts-raw`)
     expect(manifest.dependencies).toEqual([])
     expect(manifest).toMatchObject({
       version: "branch-main-abcdef1",

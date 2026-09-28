@@ -1,5 +1,9 @@
 import * as z from "zod/v4"
 
+import { isValidBuildDirectory } from "./build-directory.js"
+import { ARTIFACT_NAME_TEMPLATE_MAX_LENGTH } from "./config.js"
+import { validateFilenameTemplate } from "./templates.js"
+
 const alphanumericRegex = /^[a-zA-Z0-9]+$/
 const githubRepoRegex = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/
 const httpProtocolRegex = /^https?$/
@@ -61,6 +65,20 @@ export const buildPayloadSchema = z.object({
   runner_repo: z.string().min(1).max(255).regex(githubRepoRegex),
   runner_workflow: z.string().min(1).max(255),
   build_command: buildCommandSchema,
+  build_directory: z.string().refine(isValidBuildDirectory, "Invalid build directory").default("."),
+  rewrite_version: z.boolean().default(false),
+  artifact_name_template: z
+    .string()
+    .max(ARTIFACT_NAME_TEMPLATE_MAX_LENGTH)
+    .superRefine((value, ctx) => {
+      if (!value) return
+      try {
+        validateFilenameTemplate(value)
+      } catch (error) {
+        ctx.addIssue({ code: "custom", message: (error as Error).message })
+      }
+    })
+    .default(""),
   java_version: z.string().min(1).max(32),
   maven_version: z.string().min(1).max(32),
   pnpm_version: z.string().min(1).max(32),
